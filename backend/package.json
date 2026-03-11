@@ -1,0 +1,66 @@
+{
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.1",
+    "multer": "^2.1.1",
+    "pdfkit": "^0.17.2",
+    "pg": "^8.16.3",
+    "socket.io": "^4.8.3",
+    "uuid": "^13.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "smoke:tracker:phase1": "node scripts/runTrackerPhase1Smoke.mjs",
+    "smoke:tracker:phase1:ps": "powershell -ExecutionPolicy Bypass -File scripts/runTrackerPhase1Smoke.ps1",
+    "smoke:tracker:phase2:p0": "node scripts/runTrackerPhase2P0Smoke.mjs",
+    "smoke:tracker:phase2:bv": "node scripts/runTrackerPhase2BehavioralValidation.mjs",
+    "smoke:tracker:phase2:p1:draft": "node scripts/runTrackerPhase2P1DraftSmoke.mjs",
+    "smoke:tracker:phase2:p1:compliance": "node scripts/runTrackerPhase2P1ComplianceSmoke.mjs",
+    "smoke:tracker:phase3:p0": "node scripts/runTrackerPhase3P0Smoke.mjs",
+    "smoke:tracker:phase3:p1": "node scripts/runTrackerPhase3P1Smoke.mjs",
+    "smoke:tracker:phase3:security": "node scripts/runTrackerPhase3SecuritySmoke.mjs",
+    "smoke:tracker:phase3:perf": "node scripts/runTrackerPhase3PerformanceProbe.mjs",
+    "smoke:tracker:policy": "node scripts/runTrackerPolicySmoke.mjs",
+    "smoke:tracker:reminder": "node scripts/runTrackerReminderJobSmoke.mjs",
+    "smoke:tracker:week-closure": "node scripts/runTrackerWeekClosureJobSmoke.mjs",
+    "smoke:tracker:phase4:p0": "node scripts/runTrackerPhase4P0Smoke.mjs",
+    "smoke:tracker:phase4:p1": "node scripts/runTrackerPhase4P1Smoke.mjs",
+    "smoke:tracker:phase4:p2": "node scripts/runTrackerPhase4P2Smoke.mjs",
+    "smoke:tracker:phase4:all": "npm run smoke:tracker:phase4:p0 && npm run smoke:tracker:phase4:p1 && npm run smoke:tracker:phase4:p2",
+    "smoke:tracker:phase5:p0": "node scripts/runTrackerPhase5P0Smoke.mjs",
+    "smoke:tracker:phase5:e2e": "node scripts/runTrackerPhase5E2ESmoke.mjs",
+    "smoke:tracker:phase5:all": "npm run smoke:tracker:phase5:p0 && npm run smoke:tracker:phase5:e2e",
+    "smoke:tracker:phase6": "node scripts/runTrackerPhase6Smoke.mjs",
+    "smoke:tracker:phase7:unit": "node scripts/runTrackerPhase7UnitSmoke.mjs",
+    "smoke:tracker:phase7:api": "node scripts/runTrackerPhase7ApiSmoke.mjs",
+    "smoke:tracker:phase7:e2e": "node scripts/runTrackerPhase7E2ESmoke.mjs",
+    "smoke:tracker:phase7:perf": "node scripts/runTrackerPhase7PerformanceProbe.mjs",
+    "smoke:tracker:phase7:security": "node scripts/runTrackerPhase7SecuritySmoke.mjs",
+    "smoke:tracker:phase7:all": "npm run smoke:tracker:phase7:unit && npm run smoke:tracker:phase7:api && npm run smoke:tracker:phase7:e2e && npm run smoke:tracker:phase7:perf && npm run smoke:tracker:phase7:security",
+    "smoke:tracker:departments": "node scripts/runTrackerDepartmentLeaderboardSmoke.mjs",
+    "smoke:tracker:batch-action": "node scripts/runTrackerBatchActionSmoke.mjs"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "logs/*",
+      "schema_info.json"
+    ]
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  },
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module"
+}
