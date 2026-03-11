@@ -16,6 +16,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+frontend/eslint_out.txt
+frontend/tsc_out.txt
 
 # Environment files
 .env
@@ -32,3 +34,12 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+backend/uploads/
+backend/logs/
+
+# Accidental local files
+{
+String(id).trim()).filter(Boolean))]
+String(row.project_id))
+String(row.team_id))
+backend/console.log(c.column_name.padEnd(25)
