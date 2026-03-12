@@ -36,6 +36,10 @@ import {
   Gauge,
   Server,
 } from "lucide-react";
+import {
+  TRACK_OPTIONS as SHARED_TRACK_OPTIONS,
+  TRACK_TECH_STACK as SHARED_TRACK_TECH_STACK,
+} from "@/constants/track-tech";
 
 type SkillForm = {
   track: string;
@@ -43,216 +47,9 @@ type SkillForm = {
   proficiency_level: string;
 };
 
-const TRACK_TECH_STACKS: Record<string, string[]> = {
-  WEB_DEVELOPMENT: [
-    "HTML",
-    "CSS",
-    "JavaScript",
-    "TypeScript",
-    "React",
-    "Next.js",
-    "Vue.js",
-    "Angular",
-    "Svelte",
-    "Tailwind CSS",
-    "Bootstrap",
-    "Node.js",
-    "Express.js",
-    "NestJS",
-    "Django",
-    "Flask",
-    "FastAPI",
-    "Spring Boot",
-    "Laravel",
-    "Ruby on Rails",
-    "ASP.NET Core",
-    "GraphQL",
-    "REST API",
-    "Supabase",
-    "Firebase",
-    "PostgreSQL",
-    "MySQL",
-    "MongoDB",
-    "Redis",
-  ],
-  MOBILE_DEVELOPMENT: [
-    "Android Java",
-    "Android Kotlin",
-    "Flutter",
-    "React Native",
-    "Swift",
-    "SwiftUI",
-    "Ionic",
-    "Xamarin",
-    "Expo",
-    "Jetpack Compose",
-    "Kotlin Multiplatform",
-    "NativeScript",
-    "Cordova",
-    "Capacitor",
-  ],
-  ARTIFICIAL_INTELLIGENCE: [
-    "TensorFlow",
-    "Keras",
-    "PyTorch",
-    "FastAI",
-    "HuggingFace Transformers",
-    "LangChain",
-    "LlamaIndex",
-    "OpenAI API",
-    "Stable Diffusion",
-    "Diffusers",
-    "OpenVINO",
-    "ONNX",
-    "TensorRT",
-    "OpenCV AI",
-  ],
-  MACHINE_LEARNING: [
-    "Scikit-learn",
-    "XGBoost",
-    "LightGBM",
-    "CatBoost",
-    "Pandas",
-    "NumPy",
-    "SciPy",
-    "Matplotlib",
-    "Seaborn",
-    "MLFlow",
-    "Optuna",
-    "PyCaret",
-    "Statsmodels",
-  ],
-  DATA_SCIENCE: [
-    "Python",
-    "R",
-    "Jupyter Notebook",
-    "JupyterLab",
-    "Tableau",
-    "Power BI",
-    "Apache Spark",
-    "Hadoop",
-    "Plotly",
-    "Dask",
-    "Apache Flink",
-    "Airflow",
-    "Superset",
-    "Metabase",
-  ],
-  CYBER_SECURITY: [
-    "Kali Linux",
-    "Wireshark",
-    "Metasploit",
-    "Burp Suite",
-    "Nmap",
-    "OWASP ZAP",
-    "Snort",
-    "OpenVAS",
-    "Hashcat",
-    "YARA",
-  ],
-  BLOCKCHAIN: [
-    "Solidity",
-    "Ethereum",
-    "Web3.js",
-    "Ethers.js",
-    "Hardhat",
-    "Truffle",
-    "Polygon",
-    "IPFS",
-    "Hyperledger Fabric",
-    "Polkadot",
-    "Chainlink",
-  ],
-  CLOUD_COMPUTING: [
-    "AWS",
-    "AWS Lambda",
-    "AWS EC2",
-    "AWS S3",
-    "Google Cloud",
-    "Google BigQuery",
-    "Azure",
-    "Azure Functions",
-    "Vercel",
-    "Netlify",
-    "Cloudflare Workers",
-  ],
-  DEVOPS: [
-    "Docker",
-    "Docker Compose",
-    "Kubernetes",
-    "Helm",
-    "Jenkins",
-    "GitHub Actions",
-    "GitLab CI/CD",
-    "Terraform",
-    "Ansible",
-    "Prometheus",
-    "Grafana",
-    "ELK Stack",
-    "Istio",
-  ],
-  IOT: [
-    "Arduino",
-    "Raspberry Pi",
-    "ESP32",
-    "ESP8266",
-    "MQTT",
-    "Node-RED",
-    "ThingSpeak",
-    "Home Assistant",
-    "Azure IoT",
-    "AWS IoT",
-  ],
-  EMBEDDED_SYSTEMS: [
-    "C",
-    "C++",
-    "Embedded C",
-    "FreeRTOS",
-    "ARM Cortex",
-    "STM32",
-    "AVR",
-    "MicroPython",
-    "Zephyr RTOS",
-    "QNX",
-  ],
-  AR_VR: [
-    "Unity",
-    "Unreal Engine",
-    "ARCore",
-    "ARKit",
-    "Three.js",
-    "WebXR",
-    "Vuforia",
-    "Blender",
-    "Babylon.js",
-  ],
-  GAME_DEVELOPMENT: [
-    "Unity",
-    "Unreal Engine",
-    "Godot",
-    "CryEngine",
-    "GameMaker",
-    "Phaser",
-    "C#",
-    "C++",
-    "Lua",
-    "Pygame",
-  ],
-  DATABASE_SYSTEMS: [
-    "PostgreSQL",
-    "MySQL",
-    "MongoDB",
-    "Redis",
-    "Cassandra",
-    "Neo4j",
-    "SQLite",
-    "Oracle DB",
-    "Elasticsearch",
-    "Firebase Firestore",
-  ],
-};
-
-const TRACK_OPTIONS = Object.keys(TRACK_TECH_STACKS);
+const TRACK_TECH_STACKS = SHARED_TRACK_TECH_STACK as unknown as Record<string, string[]>;
+const TRACK_OPTIONS = SHARED_TRACK_OPTIONS;
+const TRACK_OPTION_VALUES: string[] = [...TRACK_OPTIONS];
 const PROFICIENCY_OPTIONS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"];
 const CUSTOM_OPTION = "__CUSTOM__";
 
@@ -333,7 +130,7 @@ export default function MentorProfilePage() {
       setSkills(skillsData);
 
       const currentPrimaryTrack = profileData.primary_track || "";
-      const isKnownPrimaryTrack = TRACK_OPTIONS.includes(currentPrimaryTrack);
+      const isKnownPrimaryTrack = TRACK_OPTION_VALUES.includes(currentPrimaryTrack);
 
       setProfileForm({
         department: profileData.department || "",
@@ -404,7 +201,7 @@ export default function MentorProfilePage() {
     
     // Reset form to current profile values
     const currentPrimaryTrack = profile.primary_track || "";
-    const isKnownPrimaryTrack = TRACK_OPTIONS.includes(currentPrimaryTrack);
+    const isKnownPrimaryTrack = TRACK_OPTION_VALUES.includes(currentPrimaryTrack);
 
     setProfileForm({
       department: profile.department || "",

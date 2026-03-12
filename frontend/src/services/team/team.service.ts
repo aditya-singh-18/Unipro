@@ -25,11 +25,13 @@ export const getTeamById = async (teamId: string) => {
 // src/services/team/team.service.ts
 export const createTeam = async (
   department: string,
-  maxTeamSize: number
+  maxTeamSize: number,
+  teamName: string
 ) => {
   const res = await api.post("/team/create", {
     department,
     maxTeamSize,
+    teamName,
   });
   return res.data;
 };

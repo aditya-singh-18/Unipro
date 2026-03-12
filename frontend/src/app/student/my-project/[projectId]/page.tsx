@@ -121,6 +121,17 @@ export default function ProjectDetailPage() {
 
   const { project: proj, team } = project
 
+  const formatDateSafe = (value?: string) => {
+    if (!value) return '-'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'APPROVED':
@@ -136,48 +147,65 @@ export default function ProjectDetailPage() {
 
   /* ================= FORMAT DESCRIPTION ================= */
   const formatDescription = (description: string) => {
-    // Split by emoji indicators or section markers
-    const sections = [
-      { emoji: '3️⃣', title: 'Problem Statement', key: 'problem' },
-      { emoji: '4️⃣', title: 'Objective of the Project', key: 'objective' },
-      { emoji: '5️⃣', title: 'Proposed Solution', key: 'solution' },
-      { emoji: '6️⃣', title: 'Scope of the Project', key: 'scope' },
+    const normalized = String(description || '').replace(/\r\n/g, '\n').trim()
+    if (!normalized) {
+      return { isStructured: false, paragraphs: [] as string[] }
+    }
+
+    const headingMap: Array<{ title: string; keys: string[] }> = [
+      { title: 'Problem Statement', keys: ['problem statement'] },
+      { title: 'Objective of the Project', keys: ['objective of the project', 'objective'] },
+      { title: 'Proposed Solution', keys: ['proposed solution', 'what your team provides'] },
+      { title: 'Scope of the Project', keys: ['scope of the project', 'scope', 'real-world use', 'real world use'] },
     ]
 
-    const parsedSections: { title: string; content: string[] }[] = []
-
-    sections.forEach((section, index) => {
-      const startMarker = section.emoji
-      const nextMarker = sections[index + 1]?.emoji || null
-
-      const startIndex = description.indexOf(startMarker)
-      if (startIndex === -1) return
-
-      let endIndex = nextMarker ? description.indexOf(nextMarker) : description.length
-      if (endIndex === -1) endIndex = description.length
-
-      const content = description.substring(startIndex, endIndex)
-        .replace(startMarker, '')
-        .replace(section.title, '')
+    const findHeading = (line: string) => {
+      const clean = line
+        .toLowerCase()
+        .replace(/^\d+\s*[.)-]?\s*/, '')
+        .replace(/[0-9]\uFE0F?\u20E3/g, '')
+        .replace(/[:\-\s]+$/g, '')
         .trim()
 
-      // Split into paragraphs and bullet points
-      const paragraphs = content
-        .split(/\n\n|\r\n\r\n/)
-        .map(p => p.trim())
-        .filter(p => p.length > 0)
+      return headingMap.find((h) => h.keys.includes(clean))
+    }
 
-      if (paragraphs.length > 0) {
-        parsedSections.push({ title: section.title, content: paragraphs })
+    const lines = normalized.split('\n')
+    const parsedSections: { title: string; content: string[] }[] = []
+    let activeTitle: string | null = null
+    let buffer: string[] = []
+
+    const flush = () => {
+      if (!activeTitle) return
+      const content = buffer
+        .join('\n')
+        .split(/\n\n+/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+
+      if (content.length > 0) {
+        parsedSections.push({ title: activeTitle, content })
       }
+      buffer = []
+    }
+
+    lines.forEach((line) => {
+      const heading = findHeading(line.trim())
+      if (heading) {
+        flush()
+        activeTitle = heading.title
+        return
+      }
+      buffer.push(line)
     })
 
-    // If no sections found, treat as regular description
+    flush()
+
     if (parsedSections.length === 0) {
-      const paragraphs = description
-        .split(/\n\n|\r\n\r\n/)
-        .map(p => p.trim())
-        .filter(p => p.length > 0)
+      const paragraphs = normalized
+        .split(/\n\n+/)
+        .map((p) => p.trim())
+        .filter(Boolean)
       return { isStructured: false, paragraphs }
     }
 
@@ -187,16 +215,16 @@ export default function ProjectDetailPage() {
   const formattedDesc = formatDescription(proj.description)
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
+    <div className="h-screen w-screen flex overflow-hidden bg-linear-to-br from-slate-100 to-slate-200">
       {/* ✅ SINGLE SIDEBAR */}
       <Sidebar />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Topbar title="Project Detail" />
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-6 md:py-5">
           {/* Back Button & Edit Button */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <UiverseButton
               variant="back"
               onClick={() => router.back()}
@@ -205,12 +233,12 @@ export default function ProjectDetailPage() {
             </UiverseButton>
             
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2">
               {/* Resubmit Button - Only show if REJECTED */}
               {proj.status === 'REJECTED' && (
                 <button
                   onClick={() => setResubmitModalOpen(true)}
-                  className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-lg transition-all transform hover:scale-105 shadow-lg hover:shadow-orange-200"
+                  className="rounded-lg bg-linear-to-r from-orange-500 to-orange-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-orange-600 hover:to-orange-700"
                 >
                   🔄 Resubmit Project
                 </button>
@@ -220,7 +248,7 @@ export default function ProjectDetailPage() {
               {proj.status !== 'APPROVED' && proj.status !== 'REJECTED' && (
                 <button
                   onClick={() => router.push(`/student/my-project/${projectId}/edit`)}
-                  className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold rounded-lg transition-all transform hover:scale-105 shadow-lg hover:shadow-blue-200"
+                  className="rounded-lg bg-linear-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-blue-600 hover:to-blue-700"
                 >
                   ✏️ Edit Project
                 </button>
@@ -229,19 +257,19 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             {/* LEFT COLUMN - Project Details */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="space-y-4 lg:col-span-2">
               {/* PROJECT TITLE CARD */}
-              <div className="bg-gradient-to-br from-slate-50 to-slate-100 border-2 border-slate-300 rounded-2xl shadow-lg p-10">
+              <div className="rounded-2xl border-2 border-slate-300 bg-linear-to-br from-slate-50 to-slate-100 p-5 shadow-lg md:p-7">
                 {/* Project ID and Status */}
-                <div className="flex items-start justify-between mb-6">
+                <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
-                    <span className="inline-block px-4 py-2 bg-blue-100 text-blue-700 text-xs font-bold rounded-full tracking-wider">
+                    <span className="inline-block rounded-full bg-blue-100 px-3 py-1.5 text-xs font-semibold tracking-wide text-blue-700">
                       📌 Project ID: {proj.project_id}
                     </span>
                   </div>
-                  <span className={`px-5 py-2 rounded-full text-sm font-bold ${getStatusColor(proj.status)}`}>
+                  <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${getStatusColor(proj.status)}`}>
                     {proj.status === 'APPROVED' && '✓ ' }
                     {proj.status === 'REJECTED' && '✗ '}
                     {proj.status === 'PENDING' && '⏳ '}
@@ -252,8 +280,8 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {/* Title */}
-                <h1 className="text-5xl font-bold text-slate-900 leading-tight mb-3">{proj.title}</h1>
-                <p className="text-lg text-slate-600 font-medium">Project Track: <span className="text-indigo-700 font-bold">{proj.track}</span></p>
+                <h1 className="mb-3 wrap-break-word text-2xl font-extrabold leading-tight text-slate-900 md:text-3xl lg:text-[1.75rem]">{proj.title}</h1>
+                <p className="text-sm font-medium text-slate-600 md:text-base">Project Track: <span className="font-bold text-indigo-700">{proj.track}</span></p>
               </div>
 
               {/* DESCRIPTION SECTIONS - SEPARATE CARDS */}
@@ -270,13 +298,13 @@ export default function ProjectDetailPage() {
                   const theme = themes[idx] || themes[0]
 
                   return (
-                    <div key={idx} className={`${theme.bg} border-2 ${theme.border} rounded-2xl shadow-lg p-8`}>
+                    <div key={idx} className={`${theme.bg} border-2 ${theme.border} rounded-2xl p-5 shadow-lg md:p-6`}>
                       {/* Section Header */}
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className={`w-12 h-12 ${theme.iconBg} rounded-xl flex items-center justify-center text-2xl`}>
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl ${theme.iconBg}`}>
                           {theme.icon}
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-900">{section.title}</h2>
+                        <h2 className="text-lg font-bold text-slate-900 md:text-xl">{section.title}</h2>
                       </div>
 
                       {/* Section Content */}
@@ -291,9 +319,9 @@ export default function ProjectDetailPage() {
                               .filter(item => item.length > 0)
                             
                             return (
-                              <ul key={pIdx} className="space-y-3">
+                              <ul key={pIdx} className="space-y-2">
                                 {items.map((item, iIdx) => (
-                                  <li key={iIdx} className="flex items-start gap-3 text-slate-700 leading-relaxed">
+                                  <li key={iIdx} className="flex items-start gap-2 text-sm leading-6 text-slate-700 md:text-[15px]">
                                     <span className={`${theme.iconText} font-bold mt-1`}>▸</span>
                                     <span className="flex-1">{item.replace(/^[\-\•\*]\s*/, '')}</span>
                                   </li>
@@ -303,7 +331,7 @@ export default function ProjectDetailPage() {
                           }
                           
                           return (
-                            <p key={pIdx} className="text-slate-700 text-base leading-relaxed">
+                            <p key={pIdx} className="text-sm leading-6 text-slate-700 md:text-[15px]">
                               {para}
                             </p>
                           )
@@ -314,11 +342,11 @@ export default function ProjectDetailPage() {
                 })
               ) : (
                 // Regular description - Single card
-                <div className="bg-white rounded-2xl shadow-lg p-8">
-                  <h2 className="text-2xl font-bold text-slate-900 mb-4">Description</h2>
+                <div className="rounded-2xl bg-white p-5 shadow-lg md:p-6">
+                  <h2 className="mb-3 text-xl font-bold text-slate-900">Description</h2>
                   <div className="space-y-4">
                     {formattedDesc.paragraphs?.map((para, idx) => (
-                      <p key={idx} className="text-slate-700 text-base leading-relaxed">
+                      <p key={idx} className="text-sm leading-6 text-slate-700 md:text-[15px]">
                         {para}
                       </p>
                     ))}
@@ -327,21 +355,21 @@ export default function ProjectDetailPage() {
               )}
 
               {/* TECH STACK & TRACK CARD */}
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl shadow-lg p-8 space-y-6">
+              <div className="space-y-5 rounded-2xl border-2 border-purple-200 bg-linear-to-br from-purple-50 to-pink-50 p-5 shadow-lg md:p-6">
                 {/* Tech Stack */}
                 <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-purple-200 rounded-lg flex items-center justify-center text-xl">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-200 text-lg">
                       ⚙️
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900">Tech Stack</h2>
+                    <h2 className="text-xl font-bold text-slate-900">Tech Stack</h2>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {proj.tech_stack && proj.tech_stack.length > 0 ? (
                       proj.tech_stack.map((tech) => (
                         <span
                           key={tech}
-                          className="bg-white text-purple-700 px-4 py-2 rounded-full text-sm font-bold border-2 border-purple-300 hover:shadow-lg transition-all hover:scale-105"
+                          className="rounded-full border-2 border-purple-300 bg-white px-3 py-1 text-xs font-semibold text-purple-700 md:text-sm"
                         >
                           {tech}
                         </span>
@@ -355,59 +383,59 @@ export default function ProjectDetailPage() {
 
               {/* MENTOR FEEDBACK CARD */}
               {proj.mentor_feedback && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl shadow-lg p-8">
-                  <h2 className="text-2xl font-bold text-blue-900 mb-4">💬 Mentor Feedback</h2>
-                  <p className="text-slate-700 leading-relaxed text-lg">{proj.mentor_feedback}</p>
+                <div className="rounded-2xl border-2 border-blue-200 bg-linear-to-br from-blue-50 to-indigo-50 p-5 shadow-lg md:p-6">
+                  <h2 className="mb-3 text-xl font-bold text-blue-900">💬 Mentor Feedback</h2>
+                  <p className="text-sm leading-6 text-slate-700 md:text-[15px]">{proj.mentor_feedback}</p>
                 </div>
               )}
             </div>
 
             {/* RIGHT COLUMN - Team & Timeline */}
-            <div className="space-y-6">
+            <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
               {/* TEAM INFO CARD */}
-              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200 rounded-2xl shadow-lg p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-indigo-200 rounded-lg flex items-center justify-center text-xl">
+              <div className="rounded-2xl border-2 border-indigo-200 bg-linear-to-br from-indigo-50 to-blue-50 p-4 shadow-lg md:p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-200 text-base">
                     👥
                   </div>
-                  <h2 className="text-2xl font-bold text-slate-900">Team</h2>
+                  <h2 className="text-lg font-bold text-slate-900">Team</h2>
                 </div>
                 
-                <div className="space-y-5">
-                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Team Name</p>
-                    <p className="text-lg font-bold text-indigo-700">{team.team_name || team.team_id}</p>
+                <div className="space-y-3">
+                  <div className="bg-white rounded-lg p-2 border border-indigo-100">
+                    <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Team Name</p>
+                    <p className="wrap-break-word text-sm font-bold text-indigo-700">{team.team_name || team.team_id}</p>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Team ID</p>
-                    <p className="text-sm font-semibold text-slate-900 break-all font-mono">{team.team_id}</p>
+                  <div className="bg-white rounded-lg p-2 border border-indigo-100">
+                    <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Team ID</p>
+                    <p className="break-all font-mono text-xs font-semibold text-slate-900">{team.team_id}</p>
                   </div>
 
-                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Department</p>
-                    <p className="text-sm font-semibold text-slate-900">{team.department}</p>
+                  <div className="bg-white rounded-lg p-2 border border-indigo-100">
+                    <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Department</p>
+                    <p className="text-xs font-semibold text-slate-900">{team.department}</p>
                   </div>
 
-                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Leader</p>
-                    <p className="text-sm font-semibold text-slate-900">{team.leader_enrollment_id}</p>
+                  <div className="bg-white rounded-lg p-2 border border-indigo-100">
+                    <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Leader</p>
+                    <p className="text-xs font-semibold text-slate-900">{team.leader_enrollment_id}</p>
                   </div>
 
-                  <div className="pt-4 border-t border-indigo-200 mt-4">
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Members ({team.members.length})</p>
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                  <div className="mt-3 border-t border-indigo-200 pt-3">
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Members ({team.members.length})</p>
+                    <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
                       {team.members.map((member, idx) => (
                         <div
                           key={member.enrollment_id}
-                          className="bg-white rounded-lg p-3 border border-indigo-200 hover:border-indigo-400 hover:shadow-md transition-all"
+                          className="bg-white rounded-lg p-2 border border-indigo-200 hover:border-indigo-400 transition-all"
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-400 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">
+                          <div className="flex items-center gap-2">
+                            <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-400 text-[10px] font-bold text-white">
                               {idx + 1}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-bold text-sm text-slate-900">{member.enrollment_id}</p>
+                              <p className="text-xs font-bold text-slate-900">{member.enrollment_id}</p>
                               {member.email && (
                                 <p className="text-xs text-slate-500 truncate">{member.email}</p>
                               )}
@@ -420,49 +448,31 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {/* View Progress Button */}
-                <button className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-4 rounded-lg transition-all transform hover:scale-105 shadow-lg">
+                <button className="mt-3 w-full rounded-lg bg-linear-to-r from-blue-600 to-blue-700 px-4 py-2 text-xs font-semibold text-white transition-all hover:from-blue-700 hover:to-blue-800">
                   View Progress
                 </button>
               </div>
 
               {/* TIMELINE CARD */}
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl shadow-lg p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-amber-200 rounded-lg flex items-center justify-center text-xl">
+              <div className="rounded-2xl border-2 border-amber-200 bg-linear-to-br from-amber-50 to-orange-50 p-5 shadow-lg md:p-6">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-200 text-lg">
                     📅
                   </div>
-                  <h2 className="text-xl font-bold text-slate-900">Timeline</h2>
+                  <h2 className="text-lg font-bold text-slate-900">Timeline</h2>
                 </div>
                 <div className="space-y-4">
                   <div className="pb-4 border-b border-amber-200">
                     <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Created</p>
-                    <p className="text-base font-semibold text-slate-900">
-                      {new Date(proj.created_at).toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-900">{formatDateSafe(proj.created_at)}</p>
                   </div>
                   <div className="pb-4 border-b border-amber-200">
                     <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Submitted</p>
-                    <p className="text-base font-semibold text-slate-900">
-                      {new Date(proj.submitted_at).toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-900">{formatDateSafe(proj.submitted_at)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Last Updated</p>
-                    <p className="text-base font-semibold text-slate-900">
-                      {new Date(proj.updated_at).toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-900">{formatDateSafe(proj.updated_at)}</p>
                   </div>
                 </div>
               </div>

@@ -277,7 +277,7 @@ export default function CreateProjectPage() {
   const [activeTrack, setActiveTrack] = useState<Track | ''>('')
   const [techStackMap, setTechStackMap] =
     useState<Record<string, string[]>>({})
-  const [selectedTechOption, setSelectedTechOption] = useState('')
+  const [pendingTechOptions, setPendingTechOptions] = useState<string[]>([])
   const [customTechInput, setCustomTechInput] = useState('')
 
   /* ================= UI ================= */
@@ -298,6 +298,11 @@ export default function CreateProjectPage() {
     fetchTeams()
   }, [])
 
+  useEffect(() => {
+    setPendingTechOptions([])
+    setTechError(null)
+  }, [activeTrack])
+
   /* ================= TRACK ================= */
   const addTrack = (track: Track) => {
     if (selectedTracks.includes(track)) return
@@ -306,30 +311,42 @@ export default function CreateProjectPage() {
   }
 
   const removeTrack = (track: Track) => {
-    setSelectedTracks((p) => p.filter((t) => t !== track))
+    const nextTracks = selectedTracks.filter((t) => t !== track)
+    setSelectedTracks(nextTracks)
     const copy = { ...techStackMap }
     delete copy[track]
     setTechStackMap(copy)
-    if (activeTrack === track) setActiveTrack('')
+    if (activeTrack === track) {
+      setActiveTrack(nextTracks[0] || '')
+    }
   }
 
   /* ================= TECH ================= */
   const addTech = () => {
-    if (!activeTrack || !selectedTechOption) return
+    if (!activeTrack || activeTrack === 'OTHER') return
+    if (pendingTechOptions.length === 0) {
+      setTechError('Select at least one technology first')
+      return
+    }
 
     setTechStackMap((prev) => {
       const list = prev[activeTrack] || []
-      if (list.includes(selectedTechOption)) {
-        setTechError('Technology already added')
-        return prev
-      }
-      setTechError(null)
       return {
         ...prev,
-        [activeTrack]: [...list, selectedTechOption],
+        [activeTrack]: Array.from(new Set([...list, ...pendingTechOptions])),
       }
     })
-    setSelectedTechOption('')
+    setTechError(null)
+    setPendingTechOptions([])
+  }
+
+  const togglePendingTech = (tech: string) => {
+    setPendingTechOptions((prev) =>
+      prev.includes(tech)
+        ? prev.filter((value) => value !== tech)
+        : [...prev, tech]
+    )
+    setTechError(null)
   }
 
   const addCustomTech = () => {
@@ -409,8 +426,8 @@ export default function CreateProjectPage() {
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Topbar title="Create New Project" />
 
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-4xl mx-auto space-y-6">
+        <main className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
+          <div className="w-full space-y-4">
             {/* HEADER */}
             <div className="flex items-center gap-4">
               <UiverseButton variant="back" onClick={() => router.back()}>
@@ -422,7 +439,7 @@ export default function CreateProjectPage() {
             </div>
 
             {/* FORM */}
-            <div className="glass rounded-2xl p-8">
+            <div className="glass rounded-2xl p-5 md:p-6">
               {error && (
                 <p className="mb-4 text-red-600 font-medium">{error}</p>
               )}
@@ -491,40 +508,82 @@ export default function CreateProjectPage() {
                 {selectedTracks.length > 0 && (
                   <div className="md:col-span-2 flex flex-wrap gap-2">
                     {selectedTracks.map((t) => (
-                      <span
+                      <button
                         key={t}
-                        className="chip"
-                        onClick={() => removeTrack(t)}
+                        type="button"
+                        className={`chip ${activeTrack === t ? 'chip-active' : ''}`}
+                        onClick={() => setActiveTrack(t)}
                       >
-                        {t} ✕
-                      </span>
+                        {t}
+                        <span
+                          role="button"
+                          aria-label={`Remove ${t}`}
+                          className="chip-remove"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeTrack(t)
+                          }}
+                        >
+                          ✕
+                        </span>
+                      </button>
                     ))}
                   </div>
                 )}
 
                 {/* TECH */}
                 {activeTrack && activeTrack !== 'OTHER' && (
-                  <div className="md:col-span-2 flex gap-3">
-                    <select
-                      className="form-input flex-1"
-                      value={selectedTechOption}
-                      onChange={(e) =>
-                        setSelectedTechOption(e.target.value)
-                      }
-                    >
-                      <option value="">Select Technology</option>
-                      {TRACK_TECH_STACK[activeTrack]?.map((tech) => (
-                        <option key={tech} value={tech}>
-                          {tech}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="md:col-span-2 space-y-3">
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-slate-600 mb-2">
+                          Tech options for {activeTrack}
+                        </p>
+                        <div className="form-input min-h-[170px] max-h-[230px] overflow-auto">
+                          <div className="tech-option-grid">
+                            {TRACK_TECH_STACK[activeTrack]?.map((tech) => (
+                              <label key={tech} className="tech-option-item">
+                                <span>{tech}</span>
+                                <input
+                                  type="checkbox"
+                                  checked={pendingTechOptions.includes(tech)}
+                                  onChange={() => togglePendingTech(tech)}
+                                  className="h-4 w-4 accent-blue-600"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-slate-600 mb-2">
+                          Selected for Add
+                        </p>
+                        <select
+                          multiple
+                          className="form-input min-h-[170px] max-h-[230px]"
+                          value={pendingTechOptions}
+                          onChange={(e) => {
+                            const values = Array.from(e.target.selectedOptions).map(
+                              (opt) => opt.value
+                            )
+                            setPendingTechOptions(values)
+                          }}
+                        >
+                          {pendingTechOptions.map((tech) => (
+                            <option key={tech} value={tech}>
+                              {tech}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                     <UiverseButton
                       type="button"
                       variant="create"
                       onClick={addTech}
                     >
-                      Add
+                      Add Selected
                     </UiverseButton>
                   </div>
                 )}
@@ -533,7 +592,7 @@ export default function CreateProjectPage() {
                   <div className="md:col-span-2 flex gap-3">
                     <input
                       className="form-input flex-1"
-                      placeholder="Comma separated tech"
+                      placeholder="Add custom tech (comma separated)"
                       value={customTechInput}
                       onChange={(e) =>
                         setCustomTechInput(e.target.value)
@@ -623,10 +682,43 @@ export default function CreateProjectPage() {
           color: #1e3a8a;
           font-size: 13px;
           cursor: pointer;
+          border: 1px solid transparent;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .chip-active {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+        }
+        .chip-remove {
+          font-weight: 700;
+          line-height: 1;
         }
         .chip:hover {
           background: #1e3a8a;
           color: #fff;
+        }
+        .tech-option-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+          gap: 6px;
+        }
+        .tech-option-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 13px;
+          color: #1f2937;
+          padding: 6px 8px;
+          border-radius: 8px;
+          cursor: pointer;
+          border: 1px solid #e5e7eb;
+          background: #ffffffc2;
+        }
+        .tech-option-item:hover {
+          background: #f1f5f9;
         }
       `}</style>
     </div>

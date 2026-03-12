@@ -26,10 +26,19 @@ import { pushNotification } from './notification.service.js';
 export const createTeamService = async ({
   department,
   maxTeamSize,
+  teamName,
   leaderEnrollmentId,
 }) => {
-  if (!department || !maxTeamSize) {
-    throw new Error('Department and maxTeamSize are required');
+  if (!department || !maxTeamSize || !teamName) {
+    throw new Error('Department, teamName and maxTeamSize are required');
+  }
+
+  const normalizedTeamName = String(teamName).trim();
+  if (!normalizedTeamName) {
+    throw new Error('Team name cannot be empty');
+  }
+  if (normalizedTeamName.length > 80) {
+    throw new Error('Team name must be at most 80 characters');
   }
 
   // 🔒 HARD RULE: max 3 teams per student (created + joined)
@@ -42,7 +51,13 @@ export const createTeamService = async ({
   const teamId = await generateTeamId(department);
 
   // 🏗️ Create team
-  await insertTeam(teamId, department, leaderEnrollmentId, maxTeamSize);
+  await insertTeam(
+    teamId,
+    department,
+    leaderEnrollmentId,
+    maxTeamSize,
+    normalizedTeamName
+  );
 
   // 👑 Add leader as team member
   await addTeamMember(teamId, leaderEnrollmentId, true);
@@ -60,6 +75,7 @@ export const createTeamService = async ({
 
   return {
     team_id: teamId,
+    team_name: normalizedTeamName,
     department,
     max_team_size: maxTeamSize,
   };

@@ -13,12 +13,13 @@ import { disbandTeamService } from '../services/team.service.js';
 ========================= */
 export const createTeam = async (req, res) => {
   try {
-    const { department, maxTeamSize } = req.body;
+    const { department, maxTeamSize, teamName } = req.body;
     const leaderEnrollmentId = req.user.user_key;
 
     const team = await createTeamService({
       department,
       maxTeamSize,
+      teamName,
       leaderEnrollmentId,
     });
 

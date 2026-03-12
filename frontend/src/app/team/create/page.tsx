@@ -14,6 +14,7 @@ export default function CreateTeamPage() {
   const router = useRouter();
 
   const [department, setDepartment] = useState("");
+  const [teamName, setTeamName] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
@@ -26,12 +27,17 @@ export default function CreateTeamPage() {
       return;
     }
 
+    if (!teamName.trim()) {
+      setError("Please enter a team name");
+      return;
+    }
+
     setLoading(true);
     setSuccess("");
     setError("");
 
     try {
-      const res = await createTeam(department, 4);
+      const res = await createTeam(department, 4, teamName.trim());
       setSuccess(`Team created successfully! ID: ${res.team.team_id}`);
 
       setTimeout(() => {
@@ -76,6 +82,20 @@ export default function CreateTeamPage() {
                 </h2>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="field-hover">
+                    <label className="text-sm font-medium text-slate-700">
+                      Team Name
+                    </label>
+                    <input
+                      type="text"
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      maxLength={80}
+                      placeholder="Enter your team name"
+                      className="mt-1 w-full p-3 rounded-xl border border-blue-300 bg-white/70 focus:outline-none"
+                    />
+                  </div>
+
                   <div className="field-hover">
                     <label className="text-sm font-medium text-slate-700">
                       Department

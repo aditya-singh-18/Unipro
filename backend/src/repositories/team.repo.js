@@ -8,12 +8,11 @@ export const insertTeam = async (
   department,
   leaderEnrollmentId,
   maxTeamSize,
-  teamName = null,
-  projectTitle = null
+  teamName = null
 ) => {
   const query = `
-    INSERT INTO teams (team_id, department, leader_enrollment_id, max_team_size, team_name, project_title)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO teams (team_id, department, leader_enrollment_id, max_team_size, team_name)
+    VALUES ($1, $2, $3, $4, $5)
   `;
   await pool.query(query, [
     teamId,
@@ -21,7 +20,6 @@ export const insertTeam = async (
     leaderEnrollmentId,
     maxTeamSize,
     teamName,
-    projectTitle,
   ]);
 };
 
@@ -90,7 +88,19 @@ export const getTeamMembers = async (teamId) => {
    TEAM FETCH
 ========================= */
 export const findTeamById = async (teamId) => {
-  const q = `SELECT team_id, department, leader_enrollment_id, max_team_size, created_at, team_name, project_title FROM teams WHERE team_id = $1`;
+  const q = `
+    SELECT
+      t.team_id,
+      t.department,
+      t.leader_enrollment_id,
+      t.max_team_size,
+      t.created_at,
+      t.team_name,
+      p.title AS project_title
+    FROM teams t
+    LEFT JOIN projects p ON p.project_id = t.team_id
+    WHERE t.team_id = $1
+  `;
   const r = await pool.query(q, [teamId]);
   return r.rows[0];
 };
@@ -120,9 +130,17 @@ export const countTeamsOfStudent = async (enrollmentId) => {
  */
 export const getAllTeamsOfStudent = async (enrollmentId) => {
   const q = `
-    SELECT DISTINCT t.team_id, t.department, t.leader_enrollment_id, t.max_team_size, t.created_at, t.team_name, t.project_title
+    SELECT DISTINCT
+      t.team_id,
+      t.department,
+      t.leader_enrollment_id,
+      t.max_team_size,
+      t.created_at,
+      t.team_name,
+      p.title AS project_title
     FROM teams t
     JOIN team_members tm ON tm.team_id = t.team_id
+    LEFT JOIN projects p ON p.project_id = t.team_id
     WHERE tm.enrollment_id = $1
     ORDER BY t.created_at DESC
   `;
