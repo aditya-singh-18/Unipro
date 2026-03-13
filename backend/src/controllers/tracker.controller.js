@@ -132,10 +132,11 @@ export const bootstrapProjectWeeks = async (req, res) => {
 export const getProjectWeeks = async (req, res) => {
   try {
     const { projectId } = req.params;
+    const requesterId = req.user.user_key;
 
     const weeks = await getProjectWeeksService({
       projectId,
-      userKey: req.user.user_key,
+      userKey: requesterId,
       role: req.user.role,
     });
 
@@ -212,7 +213,7 @@ export const updateWeekStatus = async (req, res) => {
 export const createWeekSubmission = async (req, res) => {
   try {
     const { weekId } = req.params;
-    const { summaryOfWork, blockers, nextWeekPlan, githubLinkSnapshot } = req.body;
+    const { summaryOfWork, blockers, nextWeekPlan, githubLinkSnapshot, githubRepoUrl } = req.body;
 
     const submission = await createWeekSubmissionService({
       weekId: Number(weekId),
@@ -220,6 +221,7 @@ export const createWeekSubmission = async (req, res) => {
       blockers,
       nextWeekPlan,
       githubLinkSnapshot,
+      githubRepoUrl,
       userKey: req.user.user_key,
       role: req.user.role,
       isResubmission: false,
@@ -291,7 +293,7 @@ export const saveWeekDraft = async (req, res) => {
 export const resubmitWeekSubmission = async (req, res) => {
   try {
     const { weekId } = req.params;
-    const { summaryOfWork, blockers, nextWeekPlan, githubLinkSnapshot } = req.body;
+    const { summaryOfWork, blockers, nextWeekPlan, githubLinkSnapshot, githubRepoUrl } = req.body;
 
     const submission = await createWeekSubmissionService({
       weekId: Number(weekId),
@@ -299,6 +301,7 @@ export const resubmitWeekSubmission = async (req, res) => {
       blockers,
       nextWeekPlan,
       githubLinkSnapshot,
+      githubRepoUrl,
       userKey: req.user.user_key,
       role: req.user.role,
       isResubmission: true,
@@ -474,13 +477,14 @@ export const getProjectTasks = async (req, res) => {
   try {
     const { projectId } = req.params;
     const { status, assignedTo, weekId } = req.query;
+    const requesterId = req.user.user_key;
 
     const tasks = await getProjectTasksService({
       projectId,
       status,
       assignedTo,
       weekId,
-      userKey: req.user.user_key,
+      userKey: requesterId,
       role: req.user.role,
     });
 
@@ -716,10 +720,11 @@ export const getAdminComplianceBoard = async (req, res) => {
 export const getProjectStatusHistory = async (req, res) => {
   try {
     const { projectId } = req.params;
+    const requesterId = req.user.user_key;
 
     const history = await getProjectStatusHistoryService({
       projectId,
-      userKey: req.user.user_key,
+      userKey: requesterId,
       role: req.user.role,
       limit: req.query?.limit,
     });

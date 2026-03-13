@@ -41,7 +41,7 @@ export default function CreateTeamPage() {
       setSuccess(`Team created successfully! ID: ${res.team.team_id}`);
 
       setTimeout(() => {
-        router.push("/team/my-teams");
+        router.push("/team?panel=teams");
       }, 1500);
     } catch (err: unknown) {
       const message =
@@ -56,7 +56,7 @@ export default function CreateTeamPage() {
   };
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-gradient-to-br from-slate-200 to-blue-200 text-[#1f2a44]">
+    <div className="h-screen w-screen flex overflow-hidden bg-linear-to-br from-slate-200 to-blue-200 text-[#1f2a44]">
       <Sidebar />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
@@ -148,7 +148,7 @@ export default function CreateTeamPage() {
             {/* Right */}
             <div className="flex flex-col gap-6">
               <div
-                onClick={() => router.push("/team/my-teams")}
+                onClick={() => router.push("/team?panel=teams")}
                 className="glass rounded-xl p-4 category-hover cursor-pointer"
               >
                 <h3 className="font-medium mb-1 truncate text-slate-800">
@@ -160,7 +160,7 @@ export default function CreateTeamPage() {
               </div>
 
               <div
-                onClick={() => router.push("/team/requests")}
+                onClick={() => router.push("/team?panel=invite")}
                 className="glass rounded-xl p-4 category-hover cursor-pointer"
               >
                 <h3 className="font-medium mb-1 truncate text-slate-800">

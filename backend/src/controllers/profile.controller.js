@@ -10,11 +10,22 @@ import {
 export const getMyProfile = async (req, res, next) => {
   try {
     const { user_key, role } = req.user;
+    
+    console.log(`📋 [Profile] Fetching ${role} profile for user_key=${user_key}`);
 
     const profile = await getMyProfileService({
       userKey: user_key,
       role
     });
+
+    if (!profile) {
+      console.warn(`⚠️  [Profile] No profile found for ${role}/${user_key}`);
+      return res.status(404).json({
+        message: 'Profile not found'
+      });
+    }
+
+    console.log(`✅ [Profile] Profile fetched for ${role}/${user_key}`, { enrollmentId: profile.enrollment_id, employeeId: profile.employee_id });
 
     // ✅ Include role in the response
     res.json({
@@ -22,6 +33,7 @@ export const getMyProfile = async (req, res, next) => {
       role
     });
   } catch (err) {
+    console.error(`❌ [Profile] Error fetching profile:`, err.message);
     next(err);
   }
 };

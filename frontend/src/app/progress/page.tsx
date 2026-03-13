@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/sidebar/StudentSidebar";
 import Topbar from "@/components/dashboard/Topbar";
 import { getMyProjects, getProjectDetail } from "@/services/project.service";
 import {
-  createProjectTask,
   createWeeklySubmission,
-  getProjectTasks,
   getWeekDraft,
   getProjectWeeks,
   getWeekReviews,
@@ -17,10 +16,6 @@ import {
   uploadTrackerFile,
   resubmitWeeklySubmission,
   saveWeekDraft,
-  updateProjectTaskStatus,
-  type TrackerTask,
-  type TrackerTaskPriority,
-  type TrackerTaskStatus,
   type TrackerWeek,
   type WeekReview,
   type WeekSubmission,
@@ -31,12 +26,6 @@ type StudentProject = {
   project_id: string;
   title?: string;
   status?: string;
-};
-
-type TeamMemberOption = {
-  enrollment_id: string;
-  name?: string;
-  email?: string;
 };
 
 const statusBadgeClass: Record<string, string> = {
@@ -61,18 +50,25 @@ const formatSubmissionField = (value?: string | null) => {
   return normalized || "-";
 };
 
+const normalizeExternalUrl = (value?: string | null) => {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^(www\.)?github\.com\//i.test(raw)) return `https://${raw}`;
+  return raw;
+};
+
 export default function ProgressPage() {
-  const [activeSection, setActiveSection] = useState<"progress" | "submission" | "task">("progress");
+  const router = useRouter();
+  const [activeSection, setActiveSection] = useState<"progress" | "submission">("progress");
   const [projects, setProjects] = useState<StudentProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [weeks, setWeeks] = useState<TrackerWeek[]>([]);
   const [selectedWeekId, setSelectedWeekId] = useState<number | null>(null);
   const [submissions, setSubmissions] = useState<WeekSubmission[]>([]);
   const [reviews, setReviews] = useState<WeekReview[]>([]);
-  const [tasks, setTasks] = useState<TrackerTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [taskSaving, setTaskSaving] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<"idle" | "saving" | "saved" | "retrying" | "error">("idle");
   const [draftSaveError, setDraftSaveError] = useState<string>("");
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
@@ -84,22 +80,8 @@ export default function ProgressPage() {
     nextWeekPlan: "",
     githubLinkSnapshot: "",
   });
-  const [taskForm, setTaskForm] = useState({
-    title: "",
-    description: "",
-    priority: "medium" as TrackerTaskPriority,
-    assignedToUserKey: "",
-  });
-  const [taskFilters, setTaskFilters] = useState<{
-    status: "all" | TrackerTaskStatus;
-    weekId: "all" | number;
-    assignedTo: "all" | string;
-  }>({
-    status: "all",
-    weekId: "all",
-    assignedTo: "all",
-  });
-  const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>([]);
+  const [projectRepoUrl, setProjectRepoUrl] = useState("");
+  const [repoLinkDraft, setRepoLinkDraft] = useState("");
   // file upload
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -226,18 +208,14 @@ export default function ProgressPage() {
       try {
         setLoading(true);
         setError("");
-        const [weekData, taskData, projectDetail] = await Promise.all([
+        const [weekData, projectDetail] = await Promise.all([
           getProjectWeeks(selectedProjectId),
-          getProjectTasks(selectedProjectId, {
-            status: taskFilters.status === "all" ? undefined : taskFilters.status,
-            weekId: taskFilters.weekId === "all" ? undefined : taskFilters.weekId,
-            assignedTo: taskFilters.assignedTo === "all" ? undefined : taskFilters.assignedTo,
-          }),
           getProjectDetail(selectedProjectId),
         ]);
         setWeeks(weekData);
-        setTasks(taskData);
-        setTeamMembers(projectDetail?.team?.members || []);
+        const persistedRepoLink = normalizeExternalUrl(projectDetail?.project?.github_repo_url);
+        setProjectRepoUrl(persistedRepoLink);
+        setRepoLinkDraft(persistedRepoLink);
         setSelectedWeekId(weekData.length ? weekData[0].week_id : null);
       } catch {
         setError("Failed to load tracker data");
@@ -247,7 +225,7 @@ export default function ProgressPage() {
     };
 
     void loadWeeksAndTasks();
-  }, [selectedProjectId, taskFilters.status, taskFilters.weekId, taskFilters.assignedTo]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
     if (!selectedWeekId) {
@@ -454,6 +432,16 @@ export default function ProgressPage() {
       return;
     }
 
+    const selectedWeekNumber = selectedWeek.week_number;
+    const isRepoCaptureWeek = selectedWeekNumber === 2 || selectedWeekNumber === 3;
+    const normalizedRepoLink = normalizeExternalUrl(repoLinkDraft);
+    const hasPermanentRepo = Boolean(normalizeExternalUrl(projectRepoUrl));
+
+    if (isRepoCaptureWeek && !hasPermanentRepo && !normalizedRepoLink) {
+      setError("Week 2/3 me permanent GitHub repository link required hai.");
+      return;
+    }
+
     try {
       setSaving(true);
       setError("");
@@ -464,7 +452,8 @@ export default function ProgressPage() {
         summaryOfWork: form.summaryOfWork.trim(),
         blockers: form.blockers.trim(),
         nextWeekPlan: form.nextWeekPlan.trim(),
-        githubLinkSnapshot: form.githubLinkSnapshot.trim(),
+        githubLinkSnapshot: normalizeExternalUrl(form.githubLinkSnapshot),
+        githubRepoUrl: hasPermanentRepo ? undefined : normalizedRepoLink || undefined,
       };
 
       if (selectedWeek.status === "rejected") {
@@ -494,15 +483,19 @@ export default function ProgressPage() {
         setUploadFiles([]);
       }
 
-      const [weekData, submissionData, reviewData] = await Promise.all([
+      const [weekData, submissionData, reviewData, projectDetail] = await Promise.all([
         getProjectWeeks(selectedProjectId),
         getWeekSubmissions(selectedWeek.week_id),
         getWeekReviews(selectedWeek.week_id),
+        getProjectDetail(selectedProjectId),
       ]);
 
       setWeeks(weekData);
       setSubmissions(submissionData);
       setReviews(reviewData);
+      const persistedRepoLink = normalizeExternalUrl(projectDetail?.project?.github_repo_url);
+      setProjectRepoUrl(persistedRepoLink);
+      setRepoLinkDraft(persistedRepoLink);
       setSuccess(selectedWeek.status === "rejected" ? "Week resubmitted successfully" : "Week submitted successfully");
       setForm({ summaryOfWork: "", blockers: "", nextWeekPlan: "", githubLinkSnapshot: "" });
       setDraftSavedAt(null);
@@ -521,118 +514,26 @@ export default function ProgressPage() {
     }
   };
 
-  const createTask = async () => {
-    if (!selectedProjectId) {
-      setError("Select project first");
-      return;
-    }
-
-    if (!taskForm.title.trim()) {
-      setError("Task title is required");
-      return;
-    }
-
-    try {
-      setTaskSaving(true);
-      setError("");
-      setSuccess("");
-
-      await createProjectTask(selectedProjectId, {
-        title: taskForm.title.trim(),
-        description: taskForm.description.trim(),
-        priority: taskForm.priority,
-        weekId: selectedWeekId || undefined,
-        assignedToUserKey: taskForm.assignedToUserKey || undefined,
-      });
-
-      const taskData = await getProjectTasks(selectedProjectId, {
-        status: taskFilters.status === "all" ? undefined : taskFilters.status,
-        weekId: taskFilters.weekId === "all" ? undefined : taskFilters.weekId,
-        assignedTo: taskFilters.assignedTo === "all" ? undefined : taskFilters.assignedTo,
-      });
-      setTasks(taskData);
-      setTaskForm({ title: "", description: "", priority: "medium", assignedToUserKey: "" });
-      setSuccess("Task created successfully");
-    } catch (e: unknown) {
-      const message =
-        typeof e === "object" &&
-        e !== null &&
-        "response" in e &&
-        typeof (e as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
-          ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-          : "Unable to create task";
-      setError(message ?? "Unable to create task");
-    } finally {
-      setTaskSaving(false);
-    }
-  };
-
-  const moveTask = async (taskId: number, status: TrackerTaskStatus) => {
-    if (!selectedProjectId) return;
-
-    try {
-      setError("");
-      await updateProjectTaskStatus(taskId, status);
-      const taskData = await getProjectTasks(selectedProjectId, {
-        status: taskFilters.status === "all" ? undefined : taskFilters.status,
-        weekId: taskFilters.weekId === "all" ? undefined : taskFilters.weekId,
-        assignedTo: taskFilters.assignedTo === "all" ? undefined : taskFilters.assignedTo,
-      });
-      setTasks(taskData);
-    } catch (e: unknown) {
-      const message =
-        typeof e === "object" &&
-        e !== null &&
-        "response" in e &&
-        typeof (e as { response?: { data?: { message?: string } } }).response?.data?.message === "string"
-          ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-          : "Unable to update task status";
-      setError(message ?? "Unable to update task status");
-    }
-  };
-
-  const taskColumns: Array<{ key: TrackerTaskStatus; title: string }> = [
-    { key: "todo", title: "Todo" },
-    { key: "in_progress", title: "In Progress" },
-    { key: "review", title: "Review" },
-    { key: "blocked", title: "Blocked" },
-    { key: "done", title: "Done" },
-  ];
-
-  const nextMoves: Record<TrackerTaskStatus, TrackerTaskStatus[]> = {
-    todo: ["in_progress"],
-    in_progress: ["review", "blocked"],
-    review: ["done", "in_progress"],
-    blocked: ["in_progress"],
-    done: [],
-  };
-
-  const getAssigneeLabel = (userKey: string | null) => {
-    if (!userKey) return "Unassigned";
-    const member = teamMembers.find((m) => m.enrollment_id === userKey);
-    return member?.name || userKey;
-  };
-
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-slate-200 text-slate-900">
+    <div className="h-screen w-screen flex overflow-hidden bg-[#d6e3f2] text-slate-900">
       <Sidebar />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Topbar title="Student Tracker" />
 
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          <section className="bg-white rounded-2xl border border-slate-200 p-4 md:p-5 shadow-sm">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 tracker-progress-shell">
+          <section className="rounded-3xl border border-sky-100/80 bg-linear-to-br from-white via-sky-50/40 to-blue-100/30 p-4 md:p-5 shadow-[0_14px_34px_rgba(44,78,130,0.12)]">
             <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
               <div className="w-full md:w-auto">
-                <h2 className="text-lg font-semibold mb-3">Project Tracker</h2>
+                <h2 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Project Tracker</h2>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setActiveSection("progress")}
-                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                    className={`rounded-full px-3 py-2 text-sm font-semibold transition ${
                       activeSection === "progress"
-                        ? "bg-blue-600 text-white"
-                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        ? "bg-sky-600 text-white shadow-[0_8px_16px_rgba(14,116,210,0.28)]"
+                        : "border border-sky-200 bg-white/85 text-slate-700 hover:bg-sky-50"
                     }`}
                   >
                     Progress
@@ -640,34 +541,33 @@ export default function ProgressPage() {
                   <button
                     type="button"
                     onClick={() => setActiveSection("submission")}
-                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                    className={`rounded-full px-3 py-2 text-sm font-semibold transition ${
                       activeSection === "submission"
-                        ? "bg-blue-600 text-white"
-                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        ? "bg-sky-600 text-white shadow-[0_8px_16px_rgba(14,116,210,0.28)]"
+                        : "border border-sky-200 bg-white/85 text-slate-700 hover:bg-sky-50"
                     }`}
                   >
                     Weekly Submission
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSection("task")}
-                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                      activeSection === "task"
-                        ? "bg-blue-600 text-white"
-                        : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    Task Assign
-                  </button>
                 </div>
               </div>
 
-              <div className="w-full md:w-96">
+              <div className="w-full md:w-auto flex flex-col md:items-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => selectedProjectId && router.push(`/team/${selectedProjectId}`)}
+                  disabled={!selectedProjectId}
+                  className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(79,70,229,0.25)] transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Open Team Board
+                </button>
+
+                <div className="w-full md:w-96">
                 <label className="block text-xs font-medium text-slate-600 mb-1">Select Project</label>
                 <select
                   value={selectedProjectId}
                   onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-sky-200 bg-white/95 px-3 py-2 text-sm outline-none focus:border-sky-500"
                 >
                   {projects.map((project) => (
                     <option key={project.project_id} value={project.project_id}>
@@ -675,11 +575,12 @@ export default function ProgressPage() {
                     </option>
                   ))}
                 </select>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <SummaryCard label="Total" value={weekCounts.total} />
             <SummaryCard label="Pending" value={weekCounts.pending} />
             <SummaryCard label="Submitted" value={weekCounts.submitted} />
@@ -688,13 +589,13 @@ export default function ProgressPage() {
             <SummaryCard label="Locked/Missed" value={weekCounts.lockedOrMissed} />
           </section>
 
-          {error && <div className="rounded-xl bg-rose-100 px-4 py-3 text-sm text-rose-700">{error}</div>}
-          {success && <div className="rounded-xl bg-emerald-100 px-4 py-3 text-sm text-emerald-700">{success}</div>}
+          {error && <div className="rounded-2xl border border-rose-200 bg-rose-50/90 px-4 py-3 text-sm text-rose-700 shadow-sm">{error}</div>}
+          {success && <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-700 shadow-sm">{success}</div>}
 
           {activeSection === "submission" ? (
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div className="lg:col-span-2 bg-white/88 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-[0_14px_30px_rgba(42,74,128,0.12)] overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200/70 flex items-center justify-between">
                 <h3 className="font-semibold">Project Weeks</h3>
                 <span className="text-xs text-slate-500">Click a week to inspect details</span>
               </div>
@@ -755,7 +656,7 @@ export default function ProgressPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+            <div className="bg-white/88 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-[0_14px_30px_rgba(42,74,128,0.12)] p-4 space-y-3">
               <h3 className="font-semibold">Submit Update</h3>
               <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
                 <p>
@@ -809,6 +710,26 @@ export default function ProgressPage() {
                 placeholder="Next week plan"
                 className="w-full min-h-16 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
               />
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-slate-600">Permanent GitHub Repository</p>
+                {projectRepoUrl ? (
+                  <a
+                    href={projectRepoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-sm text-blue-600 hover:underline break-all"
+                  >
+                    {projectRepoUrl}
+                  </a>
+                ) : (
+                  <input
+                    value={repoLinkDraft}
+                    onChange={(e) => setRepoLinkDraft(e.target.value)}
+                    placeholder="Week 2/3 me project repo link set karein (https://github.com/org/repo)"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                )}
+              </div>
               <input
                 value={form.githubLinkSnapshot}
                 onChange={(e) => setForm((s) => ({ ...s, githubLinkSnapshot: e.target.value }))}
@@ -847,7 +768,7 @@ export default function ProgressPage() {
                   <div className="space-y-1.5">
                     {uploadFiles.map((file, i) => (
                       <div key={i} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-                        <span className="text-xs text-slate-700 truncate max-w-[9rem]">{file.name}</span>
+                        <span className="text-xs text-slate-700 truncate max-w-36">{file.name}</span>
                         <span className="mx-2 text-xs text-slate-400">{(file.size / 1024).toFixed(0)} KB</span>
                         <button
                           type="button"
@@ -882,7 +803,7 @@ export default function ProgressPage() {
           {activeSection === "progress" ? (
           <>
           {/* ── Progress Overview Panel ─────────────────────────── */}
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <section className="bg-white/88 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-[0_14px_30px_rgba(42,74,128,0.12)] p-5">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-semibold text-slate-900">Progress Overview</h3>
               <span className="text-xs text-slate-400">Click any week square to view details</span>
@@ -897,7 +818,7 @@ export default function ProgressPage() {
                     style={{ background: `conic-gradient(#10b981 ${approvalPct * 3.6}deg, #f1f5f9 0deg)` }}
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-[4.5rem] h-[4.5rem] bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                    <div className="w-18 h-18 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
                       <span className="text-xl font-bold text-slate-900">{approvalPct}%</span>
                       <span className="text-[10px] text-slate-500">approved</span>
                     </div>
@@ -944,7 +865,7 @@ export default function ProgressPage() {
                     <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className={`h-full ${bg} rounded-full transition-all duration-700`}
-                        style={{ width: `${weekCounts.total > 0 ? Math.round((count / weekCounts.total) * 100) : 0}%` }}
+                        style={{ inlineSize: `${weekCounts.total > 0 ? Math.round((count / weekCounts.total) * 100) : 0}%` }}
                       />
                     </div>
                   </div>
@@ -998,8 +919,8 @@ export default function ProgressPage() {
 
           {/* ── Revisions + Reviews ─────────────────────────────── */}
           <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div className="bg-white/88 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-[0_14px_30px_rgba(42,74,128,0.12)] overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200/70 flex items-center justify-between">
                 <h3 className="font-semibold">Submission Revisions</h3>
                 <span className="text-xs text-slate-500">Latest first</span>
               </div>
@@ -1057,7 +978,7 @@ export default function ProgressPage() {
                       {sub.github_link_snapshot && (
                         <a
                           className="mt-1 inline-block text-xs text-blue-600 hover:underline"
-                          href={sub.github_link_snapshot}
+                          href={normalizeExternalUrl(sub.github_link_snapshot)}
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -1070,8 +991,8 @@ export default function ProgressPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div className="bg-white/88 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-[0_14px_30px_rgba(42,74,128,0.12)] overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200/70 flex items-center justify-between">
                 <h3 className="font-semibold">Mentor Reviews</h3>
                 <span className="text-xs text-slate-500">Per selected week</span>
               </div>
@@ -1098,170 +1019,15 @@ export default function ProgressPage() {
           </>
           ) : null}
 
-          {activeSection === "task" ? (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:p-5 space-y-4 pb-6">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Project Tasks (Kanban)</h3>
-              <span className="text-xs text-slate-500">Live tracker task board</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <select
-                value={taskFilters.status}
-                onChange={(e) =>
-                  setTaskFilters((prev) => ({
-                    ...prev,
-                    status: e.target.value as "all" | TrackerTaskStatus,
-                  }))
-                }
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="all">All Statuses</option>
-                <option value="todo">Todo</option>
-                <option value="in_progress">In Progress</option>
-                <option value="review">Review</option>
-                <option value="blocked">Blocked</option>
-                <option value="done">Done</option>
-              </select>
-
-              <select
-                value={taskFilters.weekId === "all" ? "all" : String(taskFilters.weekId)}
-                onChange={(e) =>
-                  setTaskFilters((prev) => ({
-                    ...prev,
-                    weekId: e.target.value === "all" ? "all" : Number(e.target.value),
-                  }))
-                }
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="all">All Weeks</option>
-                {weeks.map((week) => (
-                  <option key={week.week_id} value={String(week.week_id)}>
-                    Week {week.week_number}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                onClick={() => setTaskFilters({ status: "all", weekId: "all", assignedTo: "all" })}
-                className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
-              >
-                Reset Filters
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <select
-                value={taskFilters.assignedTo}
-                onChange={(e) =>
-                  setTaskFilters((prev) => ({
-                    ...prev,
-                    assignedTo: e.target.value === "all" ? "all" : e.target.value,
-                  }))
-                }
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="all">All Assignees</option>
-                {teamMembers.map((member) => (
-                  <option key={member.enrollment_id} value={member.enrollment_id}>
-                    {member.name || member.enrollment_id}
-                  </option>
-                ))}
-              </select>
-              <div className="md:col-span-2 text-xs text-slate-500 flex items-center px-1">
-                Filter tasks by assignee using your team members.
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              <input
-                value={taskForm.title}
-                onChange={(e) => setTaskForm((s) => ({ ...s, title: e.target.value }))}
-                placeholder="Task title"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              />
-              <input
-                value={taskForm.description}
-                onChange={(e) => setTaskForm((s) => ({ ...s, description: e.target.value }))}
-                placeholder="Description (optional)"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              />
-              <select
-                value={taskForm.priority}
-                onChange={(e) => setTaskForm((s) => ({ ...s, priority: e.target.value as TrackerTaskPriority }))}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-              <select
-                value={taskForm.assignedToUserKey}
-                onChange={(e) => setTaskForm((s) => ({ ...s, assignedToUserKey: e.target.value }))}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-              >
-                <option value="">Unassigned</option>
-                {teamMembers.map((member) => (
-                  <option key={member.enrollment_id} value={member.enrollment_id}>
-                    {member.name || member.enrollment_id}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={createTask}
-                disabled={taskSaving}
-                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {taskSaving ? "Adding..." : "Add Task"}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-              {taskColumns.map((column) => {
-                const colTasks = tasks.filter((t) => t.status === column.key);
-                return (
-                  <div key={column.key} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3 min-h-52">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-slate-700">{column.title}</h4>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-500 border border-slate-200">{colTasks.length}</span>
-                    </div>
-
-                    <div className="space-y-2">
-                      {colTasks.length === 0 ? (
-                        <p className="text-xs text-slate-400">No tasks</p>
-                      ) : (
-                        colTasks.map((task) => (
-                          <div key={task.task_id} className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
-                            <div className="text-sm font-medium text-slate-800">{task.title}</div>
-                            {task.description && <p className="text-xs text-slate-500 line-clamp-2">{task.description}</p>}
-                            <div className="text-[11px] text-slate-500">Priority: {task.priority}</div>
-                            <div className="text-[11px] text-slate-500">
-                              Assignee: {getAssigneeLabel(task.assigned_to_user_key)}
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {nextMoves[task.status].map((nextStatus) => (
-                                <button
-                                  key={nextStatus}
-                                  onClick={() => moveTask(task.task_id, nextStatus)}
-                                  className="rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200"
-                                >
-                                  {nextStatus}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-          ) : null}
         </main>
       </div>
+
+      <style jsx global>{`
+        .tracker-progress-shell {
+          background:
+            radial-gradient(circle at 8% -12%, rgba(77, 144, 255, 0.22) 0%, rgba(214, 227, 242, 0.6) 38%, rgba(214, 227, 242, 0.95) 100%);
+        }
+      `}</style>
 
       {weekDetailOpen && (
         <WeekDetailModal
@@ -1408,7 +1174,7 @@ function WeekDetailModal({
                           <div>
                             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">GitHub Reference</div>
                             <a
-                              href={sub.github_link_snapshot}
+                              href={normalizeExternalUrl(sub.github_link_snapshot)}
                               target="_blank"
                               rel="noreferrer"
                               className="text-sm text-blue-600 hover:underline break-all"
@@ -1498,9 +1264,19 @@ function WeekDetailModal({
 }
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
+  const palette: Record<string, string> = {
+    Total: "from-sky-500 to-blue-600",
+    Pending: "from-slate-500 to-slate-600",
+    Submitted: "from-indigo-500 to-blue-600",
+    Approved: "from-emerald-500 to-teal-600",
+    Rejected: "from-rose-500 to-pink-600",
+    "Locked/Missed": "from-amber-500 to-orange-600",
+  };
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="relative overflow-hidden rounded-2xl border border-white/70 bg-white/90 p-4 shadow-[0_10px_20px_rgba(47,83,138,0.13)]">
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-linear-to-r ${palette[label] || "from-sky-500 to-blue-600"}`} />
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
     </div>
   );

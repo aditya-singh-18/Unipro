@@ -7,6 +7,7 @@ import {
   getAutoMissedWeekCandidates,
   markWeekAsMissedIfEligible,
 } from '../repositories/trackerWeekClosure.repo.js';
+import { writeCronJobLog } from '../utils/cronLogger.js';
 
 const toInt = (value, fallback) => {
   const parsed = Number(value);
@@ -79,11 +80,24 @@ export const startTrackerWeekClosureScheduler = () => {
   const intervalMs = intervalMin * 60 * 1000;
 
   const tick = async () => {
+    const startedAt = Date.now();
     try {
       const result = await runTrackerWeekClosureJob();
       console.log(`[TrackerWeekClosureJob] transitioned=${result.transitioned}/${result.candidates}`);
+      await writeCronJobLog({
+        job: 'trackerWeekClosure',
+        status: 'success',
+        durationMs: Date.now() - startedAt,
+        result,
+      });
     } catch (err) {
       console.error('[TrackerWeekClosureJob] failed:', err.message);
+      await writeCronJobLog({
+        job: 'trackerWeekClosure',
+        status: 'error',
+        durationMs: Date.now() - startedAt,
+        error: err,
+      });
     }
   };
 

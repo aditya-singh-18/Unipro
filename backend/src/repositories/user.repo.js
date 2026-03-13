@@ -21,3 +21,4 @@ export const findUserByEnrollmentId = async (enrollmentId) => {
   const result = await pool.query(query, [enrollmentId]);
   return result.rows[0];
 };
+

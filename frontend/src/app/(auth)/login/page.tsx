@@ -44,6 +44,7 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
+      console.log('🔑 [Login] Attempting login with', { identifier, role: apiRole });
 
       const res = await loginUser({
         identifier,
@@ -51,7 +52,10 @@ export default function LoginPage() {
         role: apiRole,
       });
 
+      console.log('✅ [Login] API response:', { token: res.token, user: res.user });
+
       await login(res.token);
+      console.log('✅ [Login] Auth context updated, redirecting...');
 
       if (res.user?.enrollment_id) {
         localStorage.setItem("enrollmentId", res.user.enrollment_id);
@@ -60,16 +64,20 @@ export default function LoginPage() {
       const role = res.user.role;
 
       if (role === "STUDENT") {
+        console.log('➡️ [Login] Redirecting to /dashboard');
         router.replace("/dashboard");
       } else if (role === "ADMIN") {
+        console.log('➡️ [Login] Redirecting to /admin/dashboard');
         router.replace("/admin/dashboard");
       } else if (role === "MENTOR") {
+        console.log('➡️ [Login] Redirecting to /mentor/dashboard');
         router.replace("/mentor/dashboard");
       } else {
+        console.warn('⚠️ [Login] Unknown role:', role);
         router.replace("/login");
       }
     } catch (err) {
-      console.error(err);
+      console.error('❌ [Login] Error:', err);
       if (isAxiosError(err)) {
         const message = err.response?.data?.message;
         setError(message || "Invalid credentials");
@@ -82,7 +90,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2c3e73] to-[#1f2b4d]">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-[#2c3e73] to-[#1f2b4d]">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-8">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-[#2c3e73] flex items-center justify-center gap-2">

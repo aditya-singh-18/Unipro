@@ -2,6 +2,7 @@
 
 import { Bell, Check, CheckCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { notificationService, Notification } from "@/services/notification.service";
 import { socketService } from "@/services/socket.service";
 
@@ -34,7 +35,7 @@ export default function NotificationDropdown() {
       // Listen for real-time notifications
       const handleNewNotification = (data: unknown) => {
         const notification = data as { title: string; message: string; created_at: Date };
-        
+
         setNotifications((prev) => [
           {
             id: Date.now(),
@@ -46,6 +47,22 @@ export default function NotificationDropdown() {
           ...prev,
         ]);
         setUnreadCount((prev) => prev + 1);
+
+        // Show floating toast for real-time alerts
+        const isDeadline =
+          notification.title?.toLowerCase().includes('deadline') ||
+          notification.title?.toLowerCase().includes('reminder') ||
+          notification.title?.toLowerCase().includes('due');
+
+        if (isDeadline) {
+          toast.warning(notification.title, {
+            description: notification.message,
+          });
+        } else {
+          toast.info(notification.title, {
+            description: notification.message,
+          });
+        }
       };
 
       socketService.on('notification', handleNewNotification);
@@ -114,7 +131,7 @@ export default function NotificationDropdown() {
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-2 -right-2 bg-red-500 text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+          <span className="absolute -top-2 -right-2 bg-red-500 text-xs rounded-full px-1.5 py-0.5 min-w-5 text-center">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -157,7 +174,7 @@ export default function NotificationDropdown() {
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm truncate">{notification.title}</p>
                         {!notification.is_read && (
-                          <span className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0"></span>
+                          <span className="w-2 h-2 bg-blue-600 rounded-full shrink-0"></span>
                         )}
                       </div>
                       <p className="text-xs text-gray-600 mt-1">{notification.message}</p>
@@ -169,7 +186,7 @@ export default function NotificationDropdown() {
                           e.stopPropagation();
                           handleMarkAsRead(notification.id);
                         }}
-                        className="text-blue-600 hover:text-blue-800 flex-shrink-0"
+                        className="text-blue-600 hover:text-blue-800 shrink-0"
                       >
                         <Check size={16} />
                       </button>

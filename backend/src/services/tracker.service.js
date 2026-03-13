@@ -5,6 +5,7 @@ import { pushNotification } from './notification.service.js';
 import PDFDocument from 'pdfkit';
 import {
   getProjectById,
+  setProjectGithubRepoUrlIfEmpty,
   bootstrapProjectWeeks,
   getWeeksByProjectId,
   getWeekById,
@@ -114,6 +115,117 @@ const validatePhasePlan = (phasePlan) => {
     if (!item?.phase_name || !item?.start_week || !item?.end_week) {
       throw new Error('Each phasePlan item must include phase_name, start_week, end_week');
     }
+  }
+};
+
+const normalizeUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^(www\.)?github\.com\//i.test(raw)) return `https://${raw}`;
+  return raw;
+};
+
+const isValidGithubRepoUrl = (value) => {
+  if (!value) return false;
+  return /^https?:\/\/(www\.)?github\.com\/[^/\s]+\/[^/\s]+\/?$/i.test(value);
+};
+
+const parseGithubReference = (value) => {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const hostname = String(url.hostname || '').toLowerCase();
+    if (hostname !== 'github.com' && hostname !== 'www.github.com') {
+      return null;
+    }
+
+    const segments = String(url.pathname || '')
+      .split('/')
+      .filter(Boolean);
+
+    if (segments.length < 2) {
+      return null;
+    }
+
+    const owner = segments[0];
+    const repo = segments[1].replace(/\.git$/i, '');
+    const commitSha =
+      segments[2] === 'commit' && /^[a-f0-9]{7,40}$/i.test(String(segments[3] || ''))
+        ? segments[3]
+        : null;
+
+    return { owner, repo, commitSha };
+  } catch {
+    return null;
+  }
+};
+
+const githubApiRequest = async (path) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'unipro-tracker-validator',
+    };
+
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+
+    return await fetch(`https://api.github.com${path}`, {
+      headers,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const assertGithubReferenceIsValid = async (value) => {
+  const parsed = parseGithubReference(value);
+  if (!parsed) {
+    throw new Error('Please provide a valid GitHub link.');
+  }
+
+  const repoRes = await githubApiRequest(`/repos/${parsed.owner}/${parsed.repo}`);
+
+  if (repoRes.status === 404) {
+    throw new Error('GitHub repository not found. Please check owner/repo URL.');
+  }
+
+  if (!repoRes.ok) {
+    throw new Error('Unable to verify GitHub link right now. Please retry in a few seconds.');
+  }
+
+  if (parsed.commitSha) {
+    const commitRes = await githubApiRequest(
+      `/repos/${parsed.owner}/${parsed.repo}/commits/${parsed.commitSha}`
+    );
+
+    if (commitRes.status === 404) {
+      throw new Error('GitHub commit not found for the provided link.');
+    }
+
+    if (!commitRes.ok) {
+      throw new Error('Unable to verify GitHub commit right now. Please retry in a few seconds.');
+    }
+
+    return;
+  }
+
+  const commitsRes = await githubApiRequest(`/repos/${parsed.owner}/${parsed.repo}/commits?per_page=1`);
+
+  if (!commitsRes.ok) {
+    throw new Error('Unable to verify GitHub repository commits right now. Please retry in a few seconds.');
+  }
+
+  const commits = await commitsRes.json();
+  if (!Array.isArray(commits) || commits.length === 0) {
+    throw new Error('GitHub repository has no commits yet. Please share a repository with commits.');
   }
 };
 
@@ -276,6 +388,7 @@ export const createWeekSubmissionService = async ({
   blockers,
   nextWeekPlan,
   githubLinkSnapshot,
+  githubRepoUrl,
   userKey,
   role,
   isResubmission = false,
@@ -296,6 +409,49 @@ export const createWeekSubmissionService = async ({
     throw new Error(`Resubmission is allowed only in rejected state. Current state: ${week.status}`);
   }
 
+  const project = await assertProjectExists(week.project_id);
+  const normalizedGithubRepoUrl = normalizeUrl(githubRepoUrl);
+  const normalizedGithubSnapshot = normalizeUrl(githubLinkSnapshot);
+  const hasPermanentRepo = Boolean(String(project.github_repo_url || '').trim());
+  const isRepoCaptureWeek = week.week_number === 2 || week.week_number === 3;
+
+  if (!hasPermanentRepo && isRepoCaptureWeek && !normalizedGithubRepoUrl) {
+    throw new Error('GitHub repository link is required in week 2 or week 3.');
+  }
+
+  if (normalizedGithubRepoUrl && !isValidGithubRepoUrl(normalizedGithubRepoUrl)) {
+    throw new Error('Please provide a valid GitHub repository URL (example: https://github.com/org/repo).');
+  }
+
+  if (normalizedGithubRepoUrl) {
+    await assertGithubReferenceIsValid(normalizedGithubRepoUrl);
+  }
+
+  if (normalizedGithubSnapshot) {
+    await assertGithubReferenceIsValid(normalizedGithubSnapshot);
+  }
+
+  if (!hasPermanentRepo && normalizedGithubRepoUrl) {
+    const updatedProject = await setProjectGithubRepoUrlIfEmpty({
+      projectId: week.project_id,
+      githubRepoUrl: normalizedGithubRepoUrl,
+    });
+
+    if (updatedProject?.github_repo_url) {
+      await createTimelineEvent({
+        projectId: week.project_id,
+        weekId: week.week_id,
+        eventType: 'project_repo_linked',
+        actorUserKey: userKey,
+        actorRole: role,
+        meta: {
+          github_repo_url: updatedProject.github_repo_url,
+          captured_in_week: week.week_number,
+        },
+      });
+    }
+  }
+
   const revisionNo = await getNextSubmissionRevision(week.week_id);
 
   const submission = await createWeekSubmission({
@@ -306,7 +462,7 @@ export const createWeekSubmissionService = async ({
     summaryOfWork,
     blockers,
     nextWeekPlan,
-    githubLinkSnapshot,
+    githubLinkSnapshot: normalizedGithubSnapshot,
   });
 
   if (!isValidWeekTransition(week.status, 'submitted')) {

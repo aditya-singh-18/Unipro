@@ -70,11 +70,14 @@ export function AuthProvider({
 
   const refreshUser = async () => {
     try {
+      console.log('🔄 [Auth] Fetching profile from server...');
       const profile = await getMyProfile();
+      console.log('✅ [Auth] Profile fetched:', profile);
       setUser(profile);
     } catch (err) {
-      console.error("Failed to refresh user:", err);
+      console.error('❌ [Auth] Profile fetch failed:', err);
       logout();
+      throw err;
     }
   };
 
@@ -107,9 +110,16 @@ export function AuthProvider({
   }, []);
 
   const login = async (newToken: string) => {
+    console.log('🔐 [Auth] Storing token and fetching profile...');
     localStorage.setItem("token", newToken);
     setToken(newToken);
-    await refreshUser();
+    try {
+      await refreshUser();
+      console.log('✅ [Auth] Profile loaded successfully');
+    } catch (err) {
+      console.error('❌ [Auth] Failed to load profile:', err);
+      throw err; // re-throw so login page can catch it
+    }
   };
 
   // ✅ VERY IMPORTANT: prevent crash during HMR

@@ -1,8 +1,56 @@
 import pool from '../config/db.js';
 
+let supportsGithubRepoUrlColumn = null;
+
+const hasGithubRepoUrlColumn = async () => {
+  if (supportsGithubRepoUrlColumn !== null) {
+    return supportsGithubRepoUrlColumn;
+  }
+
+  const q = `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'projects'
+        AND column_name = 'github_repo_url'
+    ) AS exists
+  `;
+
+  const { rows } = await pool.query(q);
+  supportsGithubRepoUrlColumn = Boolean(rows[0]?.exists);
+  return supportsGithubRepoUrlColumn;
+};
+
 export const getProjectById = async (projectId) => {
-  const q = `SELECT project_id, mentor_employee_id FROM projects WHERE project_id = $1`;
+  const q = `
+    SELECT
+      p.project_id,
+      p.mentor_employee_id,
+      to_jsonb(p)->>'github_repo_url' AS github_repo_url
+    FROM projects p
+    WHERE p.project_id = $1
+  `;
   const { rows } = await pool.query(q, [projectId]);
+  return rows[0] || null;
+};
+
+export const setProjectGithubRepoUrlIfEmpty = async ({ projectId, githubRepoUrl }) => {
+  const canUseRepoColumn = await hasGithubRepoUrlColumn();
+  if (!canUseRepoColumn) {
+    return null;
+  }
+
+  const q = `
+    UPDATE projects
+    SET
+      github_repo_url = $2,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE
+      project_id = $1
+      AND (github_repo_url IS NULL OR btrim(github_repo_url) = '')
+    RETURNING project_id, github_repo_url
+  `;
+  const { rows } = await pool.query(q, [projectId, githubRepoUrl]);
   return rows[0] || null;
 };
 

@@ -19,7 +19,8 @@ export const createProject = async (req, res) => {
       title,
       description,
       track,        // ✅ ADD THIS
-      techStack
+      techStack,
+      githubRepoUrl,
     } = req.body;
 
     const requesterEnrollmentId = req.user.user_key;
@@ -30,6 +31,7 @@ export const createProject = async (req, res) => {
       description,
       track,        // ✅ PASS FORWARD
       techStack,
+      githubRepoUrl,
       requesterEnrollmentId,
     });
 
@@ -170,7 +172,7 @@ export const revokeRejectedDecision = async (req, res) => {
 
 export const resubmitProject = async (req, res) => {
   try {
-    const { projectId, title, description, track, techStack, requestMentorChange } = req.body;
+    const { projectId, title, description, track, techStack, githubRepoUrl, requestMentorChange } = req.body;
     const requesterEnrollmentId = req.user.user_key;
 
     const result = await resubmitProjectService({
@@ -179,6 +181,7 @@ export const resubmitProject = async (req, res) => {
       description,
       track,
       techStack,
+      githubRepoUrl,
       requestMentorChange,
       requesterEnrollmentId,
     });
@@ -266,7 +269,7 @@ export const getProjectDetail = async (req, res) => {
 export const editProject = async (req, res) => {
   try {
     const { projectId } = req.params;
-    const { title, description, track, techStack } = req.body;
+    const { title, description, track, techStack, githubRepoUrl } = req.body;
     const requesterEnrollmentId = req.user.user_key;
 
     const result = await editProjectService({
@@ -275,6 +278,7 @@ export const editProject = async (req, res) => {
       description,
       track,
       techStack,
+      githubRepoUrl,
       requesterEnrollmentId,
     });
 

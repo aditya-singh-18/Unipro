@@ -16,6 +16,8 @@ export const authenticate = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // For STUDENT role: user_key IS the enrollment_id (same value stored in both
+    // users.user_key and student_profiles.enrollment_id and team_members.enrollment_id)
     req.user = {
       user_key: decoded.user_key,
       role: decoded.role,

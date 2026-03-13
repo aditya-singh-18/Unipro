@@ -4,9 +4,19 @@ import jwt from 'jsonwebtoken';
 let io;
 
 export const initSocket = (httpServer) => {
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:3000',
+  ].filter(Boolean);
+
   io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      origin: (origin, callback) => {
+        if (!origin && process.env.NODE_ENV !== 'production') return callback(null, true);
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`Socket CORS blocked: origin '${origin}' not allowed`));
+      },
+      credentials: true,
     },
   });
 

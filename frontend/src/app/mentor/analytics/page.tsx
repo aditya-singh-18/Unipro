@@ -261,7 +261,7 @@ export default function MentorAnalyticsPage() {
             </p>
           </div>
 
-          <div className="w-full lg:w-auto lg:min-w-[380px]">
+          <div className="w-full lg:w-auto lg:min-w-95">
             <label className="text-xs font-semibold tracking-wide uppercase text-slate-500">Filter by project</label>
             <select
               value={selectedProjectId}
@@ -346,8 +346,8 @@ export default function MentorAnalyticsPage() {
                   </div>
                   <div className="h-4 w-full rounded-full bg-slate-100 overflow-hidden border border-slate-200">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500"
-                      style={{ width: `${completionRate}%` }}
+                      className="h-full rounded-full bg-linear-to-r from-blue-500 to-emerald-500"
+                      style={{ inlineSize: `${completionRate}%` }}
                     />
                   </div>
                   <div className="mt-3 text-sm text-slate-600">
@@ -408,7 +408,7 @@ export default function MentorAnalyticsPage() {
                           <span className="text-sm font-bold text-emerald-600">{item.completedPct}%</span>
                         </div>
                         <div className="mt-3 h-2.5 rounded-full bg-slate-200 overflow-hidden">
-                          <div className="h-full bg-emerald-500" style={{ width: `${item.completedPct}%` }} />
+                          <div className="h-full bg-emerald-500" style={{ inlineSize: `${item.completedPct}%` }} />
                         </div>
                         <div className="mt-3 text-xs text-slate-600 grid grid-cols-2 gap-2">
                           <span>Weeks: {item.metrics.totalWeeks}</span>
@@ -425,7 +425,7 @@ export default function MentorAnalyticsPage() {
                       <h3 className="text-lg font-semibold text-slate-900">{selectedProject?.title || "Selected Project"}</h3>
                       <p className="text-sm text-slate-500 mt-1">Completion based on approved vs total tracked weeks</p>
                       <div className="mt-4 h-4 w-full rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500" style={{ width: `${completionRate}%` }} />
+                        <div className="h-full bg-linear-to-r from-blue-500 to-emerald-500" style={{ inlineSize: `${completionRate}%` }} />
                       </div>
                       <p className="mt-3 text-sm text-slate-700">
                         Completed <span className="font-bold text-slate-900">{completionRate}%</span> ({filteredAggregates.approvedWeeks}/{filteredAggregates.totalWeeks} weeks)
@@ -486,7 +486,7 @@ export default function MentorAnalyticsPage() {
                         return (
                           <div
                             key={row.weekNumber}
-                            className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 hover:shadow-md transition-shadow"
+                            className="rounded-xl border border-slate-200 bg-linear-to-br from-slate-50 to-white p-5 hover:shadow-md transition-shadow"
                           >
                             <div className="flex items-center justify-between mb-4">
                               <div>
@@ -765,7 +765,7 @@ function TrendSegment({
   return (
     <div
       className={`${colorClass} flex items-center justify-center`}
-      style={{ width: `${width}%` }}
+      style={{ inlineSize: `${width}%` }}
       title={`${label}: ${value}`}
     >
       {width > 20 && <span className="text-[11px] font-bold text-white">{value}</span>}

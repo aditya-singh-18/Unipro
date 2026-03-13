@@ -421,6 +421,7 @@ export type WeekSubmissionPayload = {
   blockers?: string;
   nextWeekPlan?: string;
   githubLinkSnapshot?: string;
+  githubRepoUrl?: string;
 };
 
 export type TrackerTaskStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'blocked';

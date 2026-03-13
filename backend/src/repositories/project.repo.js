@@ -1,5 +1,26 @@
 import pool from '../config/db.js';
 
+let supportsGithubRepoUrlColumn = null;
+
+const hasGithubRepoUrlColumn = async () => {
+  if (supportsGithubRepoUrlColumn !== null) {
+    return supportsGithubRepoUrlColumn;
+  }
+
+  const q = `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'projects'
+        AND column_name = 'github_repo_url'
+    ) AS exists
+  `;
+
+  const { rows } = await pool.query(q);
+  supportsGithubRepoUrlColumn = Boolean(rows[0]?.exists);
+  return supportsGithubRepoUrlColumn;
+};
+
 /* =========================
    FIND PROJECT
 ========================= */
@@ -18,7 +39,33 @@ export const insertProject = async ({
   description,
   track,
   techStack, // array of strings
+  githubRepoUrl,
 }) => {
+  const canUseRepoColumn = await hasGithubRepoUrlColumn();
+
+  if (canUseRepoColumn) {
+    const q = `
+      INSERT INTO projects (
+        project_id,
+        title,
+        description,
+        track,
+        tech_stack,
+        github_repo_url
+      )
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+    `;
+    await pool.query(q, [
+      projectId,
+      title,
+      description,
+      track,
+      JSON.stringify(techStack),
+      githubRepoUrl || null,
+    ]);
+    return;
+  }
+
   const q = `
     INSERT INTO projects (
       project_id,
@@ -253,7 +300,36 @@ export const resubmitProject = async ({
   description,
   track,
   techStack,
+  githubRepoUrl,
 }) => {
+  const canUseRepoColumn = await hasGithubRepoUrlColumn();
+
+  if (canUseRepoColumn) {
+    const q = `
+      UPDATE projects
+      SET
+        title = $2,
+        description = $3,
+        track = $4,
+        tech_stack = $5::jsonb,
+        github_repo_url = COALESCE($6, github_repo_url),
+        status = 'RESUBMITTED',
+        mentor_feedback = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE project_id = $1
+    `;
+
+    await pool.query(q, [
+      projectId,
+      title,
+      description,
+      track,
+      JSON.stringify(techStack),
+      githubRepoUrl || null,
+    ]);
+    return;
+  }
+
   const q = `
     UPDATE projects
     SET
@@ -285,7 +361,34 @@ export const editProjectBeforeApproval = async ({
   description,
   track,
   techStack,
+  githubRepoUrl,
 }) => {
+  const canUseRepoColumn = await hasGithubRepoUrlColumn();
+
+  if (canUseRepoColumn) {
+    const q = `
+      UPDATE projects
+      SET
+        title = $2,
+        description = $3,
+        track = $4,
+        tech_stack = $5::jsonb,
+        github_repo_url = COALESCE($6, github_repo_url),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE project_id = $1
+    `;
+
+    await pool.query(q, [
+      projectId,
+      title,
+      description,
+      track,
+      JSON.stringify(techStack),
+      githubRepoUrl || null,
+    ]);
+    return;
+  }
+
   const q = `
     UPDATE projects
     SET
@@ -345,6 +448,7 @@ export const getProjectsOfStudent = async (enrollmentId) => {
       p.project_id,
       p.title,
       p.status,
+      to_jsonb(p)->>'github_repo_url' AS github_repo_url,
       p.mentor_employee_id,
       p.mentor_feedback,
       p.approved_at,
@@ -366,18 +470,19 @@ export const getProjectsOfStudent = async (enrollmentId) => {
 export const findProjectDetailById = async (projectId) => {
   const q = `
     SELECT
-      project_id,
-      title,
-      description,
-      track,
-      tech_stack,
-      status,
-      mentor_employee_id,
-      mentor_feedback,
-      approved_at,
-      created_at
-    FROM projects
-    WHERE project_id = $1
+      p.project_id,
+      p.title,
+      p.description,
+      p.track,
+      p.tech_stack,
+      to_jsonb(p)->>'github_repo_url' AS github_repo_url,
+      p.status,
+      p.mentor_employee_id,
+      p.mentor_feedback,
+      p.approved_at,
+      p.created_at
+    FROM projects p
+    WHERE p.project_id = $1
   `;
 
   const r = await pool.query(q, [projectId]);

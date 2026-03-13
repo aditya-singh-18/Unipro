@@ -479,7 +479,7 @@ export default function CreateProjectPage() {
                 <div className="md:col-span-2">
                   <label className="form-label">Description *</label>
                   <textarea
-                    className="form-input min-h-[140px]"
+                    className="form-input min-h-35"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
@@ -539,7 +539,7 @@ export default function CreateProjectPage() {
                         <p className="text-xs font-medium text-slate-600 mb-2">
                           Tech options for {activeTrack}
                         </p>
-                        <div className="form-input min-h-[170px] max-h-[230px] overflow-auto">
+                        <div className="form-input min-h-42.5 max-h-57.5 overflow-auto">
                           <div className="tech-option-grid">
                             {TRACK_TECH_STACK[activeTrack]?.map((tech) => (
                               <label key={tech} className="tech-option-item">
@@ -561,7 +561,7 @@ export default function CreateProjectPage() {
                         </p>
                         <select
                           multiple
-                          className="form-input min-h-[170px] max-h-[230px]"
+                          className="form-input min-h-42.5 max-h-57.5"
                           value={pendingTechOptions}
                           onChange={(e) => {
                             const values = Array.from(e.target.selectedOptions).map(
@@ -661,11 +661,11 @@ export default function CreateProjectPage() {
         .form-label {
           font-size: 14px;
           font-weight: 500;
-          margin-bottom: 6px;
+          margin-block-end: 6px;
           display: block;
         }
         .form-input {
-          width: 100%;
+          inline-size: 100%;
           padding: 10px 14px;
           border-radius: 10px;
           border: 1px solid #ccc;

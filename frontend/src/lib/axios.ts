@@ -33,15 +33,19 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     if (typeof window !== "undefined") {
       const status = error.response?.status;
+      const requestUrl = error.config?.url || "";
+      // Only redirect to login if we're not already on login page AND token exists in storage
+      // This prevents redirect loops during initial page load
+      const token = localStorage.getItem("token");
+      const isLoginPage = window.location.pathname === "/login" || window.location.pathname === "/register";
+      const isAuthProfileRequest = requestUrl.includes("/auth/profile");
 
-      if (status === 401 || status === 403) {
-        // 🔒 Token invalid / expired
+      // Treat only true auth failures as session-expired events.
+      // 403 can be endpoint-level permission denial and should not force logout.
+      if ((status === 401 || (status === 403 && isAuthProfileRequest)) && token && !isLoginPage) {
+        console.warn(`🔒 [Axios] Session expired (${status}), clearing token and redirecting to login`);
         localStorage.removeItem("token");
-
-        // Optional hard redirect (safe)
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
-        }
+        window.location.href = "/login";
       }
     }
 

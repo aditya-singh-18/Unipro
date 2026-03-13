@@ -6,6 +6,7 @@ export interface Project {
   project_id: string;
   title: string;
   description?: string;
+  github_repo_url?: string;
 
   track: string;                 // ✅ NEW
   tech_stack: string[];           // ✅ ARRAY
@@ -40,4 +41,5 @@ export interface CreateProjectPayload {
   description: string;
   track: string;          // ✅ REQUIRED
   techStack: string[];    // ✅ ARRAY
+  githubRepoUrl?: string;
 }

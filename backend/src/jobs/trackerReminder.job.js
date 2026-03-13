@@ -5,6 +5,7 @@ import {
 } from '../repositories/trackerReminder.repo.js';
 import { pushNotification } from '../services/notification.service.js';
 import { getTrackerPolicySettingsService } from '../services/trackerPolicy.service.js';
+import { writeCronJobLog } from '../utils/cronLogger.js';
 
 const toInt = (value, fallback) => {
   const parsed = Number(value);
@@ -97,13 +98,26 @@ export const startTrackerReminderScheduler = () => {
   const intervalMs = intervalMin * 60 * 1000;
 
   const tick = async () => {
+    const startedAt = Date.now();
     try {
       const result = await runTrackerReminderJob();
       console.log(
         `[TrackerReminderJob] student sent=${result.student.sent}/${result.student.candidates}, mentor sent=${result.mentor.sent}/${result.mentor.candidates}`
       );
+      await writeCronJobLog({
+        job: 'trackerReminder',
+        status: 'success',
+        durationMs: Date.now() - startedAt,
+        result,
+      });
     } catch (err) {
       console.error('[TrackerReminderJob] failed:', err.message);
+      await writeCronJobLog({
+        job: 'trackerReminder',
+        status: 'error',
+        durationMs: Date.now() - startedAt,
+        error: err,
+      });
     }
   };
 

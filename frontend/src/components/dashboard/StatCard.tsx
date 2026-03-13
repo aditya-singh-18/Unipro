@@ -23,12 +23,12 @@ export default function StatCard({
         cursor-pointer
         rounded-2xl
         p-5
-        h-[140px]
+        h-35
         flex
         flex-col
         text-white
         overflow-hidden
-        bg-gradient-to-r ${bg}
+        bg-linear-to-r ${bg}
         category-hover
         active:scale-[0.98]
       `}

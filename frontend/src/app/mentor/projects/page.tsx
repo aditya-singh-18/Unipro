@@ -353,7 +353,7 @@ export default function MentorAssignedProjectsPage() {
                             {item.phaseName ? ` (${item.phaseName})` : ""}
                             <div className="text-xs text-slate-500">Revision #{item.revisionNo}</div>
                           </td>
-                          <td className="py-3 px-4 text-sm text-slate-700 max-w-[360px]">
+                          <td className="py-3 px-4 text-sm text-slate-700 max-w-90">
                             <div className="line-clamp-2">{item.summaryOfWork}</div>
                           </td>
                           <td className="py-3 px-4 text-sm text-slate-600">{new Date(item.submittedAt).toLocaleString()}</td>

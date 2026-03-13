@@ -1,226 +1,923 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Mail,
+  Plus,
+  Users,
+} from "lucide-react";
 
 import Sidebar from "@/components/sidebar/StudentSidebar";
 import Topbar from "@/components/dashboard/Topbar";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/store/auth.store";
+import {
+  getMyTeams,
+  getTeamById,
+  removeTeamMember,
+} from "@/services/team/team.service";
+import {
+  getMyInvitations,
+  respondToInvite,
+  sendTeamInvite,
+} from "@/services/team/invitation.service";
+import {
+  createProjectTask,
+  getProjectTasks,
+  updateProjectTaskStatus,
+  type TrackerTask,
+  type TrackerTaskPriority,
+  type TrackerTaskStatus,
+} from "@/services/tracker.service";
+import {
+  getStudentMeetings,
+  type Meeting,
+} from "@/services/meeting.service";
 
-import { getMyTeams } from "@/services/team/team.service";
-import { getMyInvitations } from "@/services/team/invitation.service";
+type TeamMember = {
+  enrollment_id: string;
+  is_leader: boolean;
+  name?: string;
+  student_name?: string;
+};
+
+type TeamSummary = {
+  team_id: string;
+  team_name?: string | null;
+  department: string;
+  max_team_size: number;
+  leader_enrollment_id: string;
+  project_title?: string | null;
+  created_at?: string;
+  members: TeamMember[];
+};
+
+type TeamProject = {
+  project_id: string;
+  title?: string | null;
+  status?: string | null;
+};
+
+type TeamDetail = {
+  team_id: string;
+  team_name?: string | null;
+  department: string;
+  max_team_size: number;
+  leader_enrollment_id: string;
+  project_title?: string | null;
+  created_at?: string;
+  members: TeamMember[];
+  projects?: TeamProject[];
+};
+
+type TeamInvitation = {
+  id: number;
+  team_id: string;
+  invited_by_enrollment_id: string;
+};
+
+type PanelKey = "teams" | "invitations" | "invite" | "meetings";
+
+const boardColumns: Array<{ key: TrackerTaskStatus; title: string }> = [
+  { key: "todo", title: "To Do" },
+  { key: "in_progress", title: "In Progress" },
+  { key: "review", title: "Review" },
+  { key: "blocked", title: "Blocked" },
+  { key: "done", title: "Done" },
+];
+
+const nextMoves: Record<TrackerTaskStatus, TrackerTaskStatus[]> = {
+  todo: ["in_progress"],
+  in_progress: ["review", "blocked"],
+  review: ["done", "in_progress"],
+  blocked: ["in_progress"],
+  done: [],
+};
+
+const meetingBadgeClass: Record<string, string> = {
+  scheduled: "bg-blue-100 text-blue-700",
+  completed: "bg-emerald-100 text-emerald-700",
+  cancelled: "bg-rose-100 text-rose-700",
+};
 
 export default function TeamDashboard() {
   const router = useRouter();
-
+  const searchParams = useSearchParams();
+  const { token, user } = useAuth();
+  const [activePanel, setActivePanel] = useState<PanelKey>("teams");
   const [teamCount, setTeamCount] = useState<number>(0);
   const [inviteCount, setInviteCount] = useState<number>(0);
+  const [meetingCount, setMeetingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [myId, setMyId] = useState("");
+
+  const [panelError, setPanelError] = useState<string>("");
+  const [panelSuccess, setPanelSuccess] = useState<string>("");
+
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
+  const [teamDetailLoading, setTeamDetailLoading] = useState(false);
+  const [confirmMember, setConfirmMember] = useState<TeamMember | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  const [kanbanTasks, setKanbanTasks] = useState<TrackerTask[]>([]);
+  const [kanbanLoading, setKanbanLoading] = useState(false);
+  const [kanbanSaving, setKanbanSaving] = useState(false);
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    priority: "medium" as TrackerTaskPriority,
+    assignedToUserKey: "",
+  });
+
+  const [inviteForm, setInviteForm] = useState({
+    teamId: "",
+    enrollmentId: "",
+  });
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [respondingInviteId, setRespondingInviteId] = useState<number | null>(null);
+
   useEffect(() => {
-    fetchCounts();
+    if (typeof window !== "undefined") {
+      setMyId((localStorage.getItem("enrollmentId") || "").trim());
+    }
   }, []);
 
-  const fetchCounts = async () => {
-    try {
-      const teamRes = await getMyTeams();
-      setTeamCount(teamRes?.count ?? teamRes?.teams?.length ?? 0);
+  useEffect(() => {
+    const requestedPanel = searchParams.get("panel") as PanelKey | null;
+    const requestedTeamId = searchParams.get("teamId");
+    if (requestedPanel && ["teams", "invitations", "invite", "meetings"].includes(requestedPanel)) {
+      setActivePanel(requestedPanel);
+    }
+    if (requestedTeamId) {
+      setActivePanel("teams");
+      setSelectedTeamId(requestedTeamId);
+    }
+  }, [searchParams]);
 
-      const inviteRes = await getMyInvitations();
-      setInviteCount(inviteRes?.count ?? inviteRes?.invitations?.length ?? 0);
-    } catch (err) {
-      console.error("Failed to fetch team stats", err);
+  useEffect(() => {
+    if (!token || user?.role !== "STUDENT") {
+      router.replace("/login");
+    }
+  }, [token, user?.role, router]);
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setPanelError("");
+      const [teamRes, inviteRes, meetingRes] = await Promise.all([
+        getMyTeams(),
+        getMyInvitations(),
+        getStudentMeetings(),
+      ]);
+
+      const nextTeams = teamRes?.teams || [];
+      const nextInvitations = inviteRes?.invitations || [];
+      const nextMeetings = meetingRes?.all || [];
+
+      setTeams(nextTeams);
+      setInvitations(nextInvitations);
+      setMeetings(nextMeetings);
+      setTeamCount(teamRes?.count ?? nextTeams.length ?? 0);
+      setInviteCount(inviteRes?.count ?? nextInvitations.length ?? 0);
+      setMeetingCount(nextMeetings.filter((item) => item.status === "scheduled").length);
+
+      if (!inviteForm.teamId && nextTeams.length > 0) {
+        setInviteForm((prev) => ({ ...prev, teamId: nextTeams[0].team_id }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch team workspace data", error);
+      setPanelError("Failed to load team workspace");
     } finally {
       setLoading(false);
     }
+  }, [inviteForm.teamId]);
+
+  const loadTeamWorkspace = useCallback(async (teamId: string) => {
+    try {
+      setTeamDetailLoading(true);
+      setPanelError("");
+      const res = await getTeamById(teamId);
+      const data = res?.data ?? res;
+      const normalized: TeamDetail = {
+        ...data.team,
+        members: data.members || [],
+        projects: data.projects || [],
+      };
+      setSelectedTeam(normalized);
+
+      const projectId = String(normalized.projects?.[0]?.project_id || "");
+      if (projectId) {
+        await loadKanbanTasks(projectId);
+      } else {
+        setKanbanTasks([]);
+      }
+    } catch (error) {
+      console.error(error);
+      setPanelError("Failed to load team workspace");
+    } finally {
+      setTeamDetailLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!token || user?.role !== "STUDENT") return;
+    void loadDashboardData();
+  }, [loadDashboardData, token, user?.role]);
+
+  useEffect(() => {
+    if (!token || user?.role !== "STUDENT") return;
+    if (!selectedTeamId) {
+      setSelectedTeam(null);
+      setKanbanTasks([]);
+      return;
+    }
+
+    void loadTeamWorkspace(selectedTeamId);
+  }, [selectedTeamId, loadTeamWorkspace, token, user?.role]);
+
+  const loadKanbanTasks = async (projectId: string) => {
+    try {
+      setKanbanLoading(true);
+      const tasks = await getProjectTasks(projectId);
+      setKanbanTasks(tasks);
+    } catch {
+      setPanelError("Failed to load team tasks");
+      setKanbanTasks([]);
+    } finally {
+      setKanbanLoading(false);
+    }
   };
 
-  const stats = [
+  const handleInvitation = async (inviteId: number, action: "ACCEPT" | "REJECT") => {
+    try {
+      setRespondingInviteId(inviteId);
+      setPanelError("");
+      setPanelSuccess("");
+      await respondToInvite(inviteId, action);
+      setInvitations((prev) => prev.filter((item) => item.id !== inviteId));
+      setInviteCount((prev) => Math.max(0, prev - 1));
+      setPanelSuccess(action === "ACCEPT" ? "Invitation accepted" : "Invitation rejected");
+      if (action === "ACCEPT") {
+        await loadDashboardData();
+      }
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      setPanelError(message || "Unable to process invitation");
+    } finally {
+      setRespondingInviteId(null);
+    }
+  };
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteForm.teamId || !inviteForm.enrollmentId.trim()) {
+      setPanelError("Team and Enrollment ID are required");
+      return;
+    }
+
+    try {
+      setSendingInvite(true);
+      setPanelError("");
+      setPanelSuccess("");
+      await sendTeamInvite(inviteForm.teamId, inviteForm.enrollmentId.trim());
+      setInviteForm((prev) => ({ ...prev, enrollmentId: "" }));
+      setPanelSuccess("Invitation sent successfully");
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      setPanelError(message || "Failed to send invite");
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const handleRemoveMember = async () => {
+    if (!selectedTeam || !confirmMember) return;
+    try {
+      setRemoving(true);
+      setPanelError("");
+      await removeTeamMember(selectedTeam.team_id, confirmMember.enrollment_id);
+      setConfirmMember(null);
+      await loadTeamWorkspace(selectedTeam.team_id);
+      await loadDashboardData();
+      setPanelSuccess("Member removed successfully");
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      setPanelError(message || "Failed to remove member");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const createKanbanTask = async () => {
+    const projectId = String(selectedTeam?.projects?.[0]?.project_id || "");
+    if (!projectId) {
+      setPanelError("This team has no linked project yet");
+      return;
+    }
+
+    if (!taskForm.title.trim()) {
+      setPanelError("Task title is required");
+      return;
+    }
+
+    try {
+      setKanbanSaving(true);
+      setPanelError("");
+      await createProjectTask(projectId, {
+        title: taskForm.title.trim(),
+        priority: taskForm.priority,
+        assignedToUserKey: taskForm.assignedToUserKey || undefined,
+      });
+      setTaskForm({ title: "", priority: "medium", assignedToUserKey: "" });
+      await loadKanbanTasks(projectId);
+      setPanelSuccess("Task created successfully");
+    } catch {
+      setPanelError("Unable to create task");
+    } finally {
+      setKanbanSaving(false);
+    }
+  };
+
+  const moveKanbanTask = async (taskId: number, status: TrackerTaskStatus) => {
+    const projectId = String(selectedTeam?.projects?.[0]?.project_id || "");
+    if (!projectId) return;
+
+    try {
+      setPanelError("");
+      await updateProjectTaskStatus(taskId, status);
+      await loadKanbanTasks(projectId);
+    } catch {
+      setPanelError("Unable to update task status");
+    }
+  };
+
+  const scheduledMeetings = useMemo(
+    () => meetings.filter((item) => item.status === "scheduled"),
+    [meetings]
+  );
+
+  const cardConfig = [
     {
-      t: "My Teams",
-      v: loading ? "…" : teamCount,
-      g: "from-blue-400 to-blue-600",
-      p: "/team/my-teams",
+      key: "teams" as const,
+      title: "My Teams",
+      value: loading ? "…" : String(teamCount),
+      description: "Open team list",
+      className: "from-blue-500 to-blue-600",
+      icon: <Users size={18} />,
     },
     {
-      t: "New Invitations",
-      v: loading ? "…" : inviteCount,
-      g: "from-emerald-400 to-emerald-600",
-      p: "/team/invitations",
+      key: "invitations" as const,
+      title: "New Invitations",
+      value: loading ? "…" : String(inviteCount),
+      description: "Respond inline",
+      className: "from-emerald-500 to-emerald-600",
+      icon: <Mail size={18} />,
     },
     {
-      t: "Send Invite",
-      v: "Invite member", // next phase
-      g: "from-amber-400 to-amber-600",
-      p: "/team/requests",
+      key: "invite" as const,
+      title: "Send Invite",
+      value: "Invite member",
+      description: "Open send form",
+      className: "from-amber-500 to-orange-500",
+      icon: <Plus size={18} />,
     },
     {
-      t: "Meeting in $ Hr",
-      v: "1", // later
-      g: "from-indigo-400 to-indigo-600",
-      p: "/meetings",
+      key: "meetings" as const,
+      title: "Meetings",
+      value: loading ? "…" : String(meetingCount),
+      description: "Connected to meeting tab",
+      className: "from-indigo-500 to-violet-600",
+      icon: <CalendarDays size={18} />,
     },
   ];
 
+  const renderActivePanel = () => {
+    if (activePanel === "teams") {
+      if (selectedTeamId && selectedTeam) {
+        const projectId = String(selectedTeam.projects?.[0]?.project_id || "");
+        const isLeader = !!myId && selectedTeam.leader_enrollment_id.trim() === myId;
+        const locked = !!selectedTeam.projects?.length;
+
+        return (
+          <section className="workspace-card space-y-6">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTeamId(null);
+                    setSelectedTeam(null);
+                    setKanbanTasks([]);
+                    router.replace("/team");
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <ArrowLeft size={16} />
+                  Back To My Teams
+                </button>
+                <h2 className="mt-4 text-2xl font-bold text-slate-900">
+                  {selectedTeam.team_name || `Team ${selectedTeam.team_id}`}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">All team work is managed here now.</p>
+              </div>
+
+              <div className="rounded-2xl bg-linear-to-br from-indigo-100 to-blue-100 p-4 shrink-0">
+                <Users className="text-indigo-600" size={32} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <MetricCard label="Department" value={selectedTeam.department} />
+              <MetricCard label="Team Size" value={`${selectedTeam.members.length}/${selectedTeam.max_team_size}`} />
+              <MetricCard label="Project" value={selectedTeam.project_title || "Not linked yet"} />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+              <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Team Members</h3>
+                  <p className="text-sm text-slate-500">Click remove only if you are the leader and the team is not locked.</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {selectedTeam.members.map((member) => {
+                  const removable = isLeader && !locked && !member.is_leader;
+                  return (
+                    <div
+                      key={member.enrollment_id}
+                      className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${member.is_leader ? "border-indigo-300 bg-indigo-50" : "border-slate-200 bg-white"}`}
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-900">{member.name || member.student_name || member.enrollment_id}</p>
+                        <p className="text-xs text-slate-500">{member.enrollment_id}</p>
+                        {member.is_leader && <p className="text-xs font-semibold text-indigo-600 mt-1">Team Leader</p>}
+                      </div>
+
+                      {removable ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmMember(member)}
+                          className="rounded-lg bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-200"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Team Task Kanban</h3>
+                  <p className="text-sm text-slate-500">
+                    {projectId ? `Linked to project ${projectId}` : "Project create hone ke baad board yahan auto-enable ho jayega."}
+                  </p>
+                </div>
+
+                {projectId ? (
+                  <button
+                    type="button"
+                    onClick={() => void loadKanbanTasks(projectId)}
+                    className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100"
+                  >
+                    Refresh
+                  </button>
+                ) : null}
+              </div>
+
+              {projectId ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <input
+                      value={taskForm.title}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="Task title"
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                    <select
+                      value={taskForm.priority}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as TrackerTaskPriority }))}
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                    <select
+                      value={taskForm.assignedToUserKey}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, assignedToUserKey: e.target.value }))}
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    >
+                      <option value="">Unassigned</option>
+                      {selectedTeam.members.map((member) => (
+                        <option key={member.enrollment_id} value={member.enrollment_id}>
+                          {member.name || member.student_name || member.enrollment_id}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={createKanbanTask}
+                      disabled={kanbanSaving}
+                      className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {kanbanSaving ? "Adding..." : "Add Task"}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                    {boardColumns.map((column) => {
+                      const columnTasks = kanbanTasks.filter((task) => task.status === column.key);
+                      return (
+                        <div key={column.key} className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3 min-h-60">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-semibold text-slate-700">{column.title}</h4>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                              {columnTasks.length}
+                            </span>
+                          </div>
+
+                          {kanbanLoading ? (
+                            <p className="text-xs text-slate-400">Loading tasks...</p>
+                          ) : columnTasks.length === 0 ? (
+                            <p className="text-xs text-slate-400">No tasks</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {columnTasks.map((task) => (
+                                <div key={task.task_id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                  <div className="text-sm font-semibold text-slate-900">{task.title}</div>
+                                  <div className="text-[11px] text-slate-500">Priority: {task.priority}</div>
+                                  <div className="text-[11px] text-slate-500">
+                                    Assignee: {getMemberLabel(selectedTeam.members, task.assigned_to_user_key)}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {nextMoves[task.status].map((nextStatus) => (
+                                      <button
+                                        key={nextStatus}
+                                        type="button"
+                                        onClick={() => void moveKanbanTask(task.task_id, nextStatus)}
+                                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                                      >
+                                        {nextStatus}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </section>
+        );
+      }
+
+      return (
+        <section className="workspace-card space-y-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">My Teams</h2>
+              <p className="text-sm text-slate-500 mt-1">Card pe click karte hi team workspace yahin niche open hoga.</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push("/team/create")}
+              className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(22,163,74,0.28)] hover:bg-emerald-700"
+            >
+              + Create Team
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="text-slate-500">Loading teams...</div>
+          ) : teams.length === 0 ? (
+            <EmptyState text="You are not part of any team yet." />
+          ) : (
+            <div className="space-y-3">
+              {teams.map((team) => (
+                <button
+                  key={team.team_id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTeamId(team.team_id);
+                    router.replace(`/team?teamId=${team.team_id}`);
+                    setPanelError("");
+                    setPanelSuccess("");
+                  }}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-lg font-semibold text-slate-900">{team.team_name || `Team ${team.team_id}`}</p>
+                      <p className="text-sm text-slate-500">{team.department} · {team.members.length}/{team.max_team_size} members</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project</p>
+                      <p className="text-sm font-medium text-slate-800">{team.project_title || "Pending"}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    if (activePanel === "invitations") {
+      return (
+        <section className="workspace-card space-y-5">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">New Invitations</h2>
+            <p className="text-sm text-slate-500 mt-1">Ab ye page alag nahi khulega. Sab kuch yahin handle hoga.</p>
+          </div>
+
+          {loading ? (
+            <div className="text-slate-500">Loading invitations...</div>
+          ) : invitations.length === 0 ? (
+            <EmptyState text="You don’t have any team invitations right now." />
+          ) : (
+            <div className="space-y-3">
+              {invitations.map((invite) => (
+                <div key={invite.id} className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-lg font-semibold text-slate-900">Team {invite.team_id}</p>
+                      <p className="text-sm text-slate-500">Invited by {invite.invited_by_enrollment_id}</p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={respondingInviteId === invite.id}
+                        onClick={() => void handleInvitation(invite.id, "ACCEPT")}
+                        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        disabled={respondingInviteId === invite.id}
+                        onClick={() => void handleInvitation(invite.id, "REJECT")}
+                        className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    if (activePanel === "invite") {
+      return (
+        <section className="workspace-card space-y-5">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Send Invite</h2>
+            <p className="text-sm text-slate-500 mt-1">Invite flow bhi ab isi page ke niche open hoga.</p>
+          </div>
+
+          <form onSubmit={handleSendInvite} className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <select
+              value={inviteForm.teamId}
+              onChange={(e) => setInviteForm((prev) => ({ ...prev, teamId: e.target.value }))}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="">Select Team</option>
+              {teams.map((team) => (
+                <option key={team.team_id} value={team.team_id}>
+                  {team.team_name || team.team_id}
+                </option>
+              ))}
+            </select>
+
+            <input
+              value={inviteForm.enrollmentId}
+              onChange={(e) => setInviteForm((prev) => ({ ...prev, enrollmentId: e.target.value }))}
+              placeholder="Student Enrollment ID"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500"
+            />
+
+            <button
+              type="submit"
+              disabled={sendingInvite}
+              className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {sendingInvite ? "Sending..." : "Send Invite"}
+            </button>
+          </form>
+        </section>
+      );
+    }
+
+    return (
+      <section className="workspace-card space-y-5">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Meetings</h2>
+          <p className="text-sm text-slate-500 mt-1">Meeting card ab directly student meetings data se connected hai.</p>
+        </div>
+
+        {loading ? (
+          <div className="text-slate-500">Loading meetings...</div>
+        ) : scheduledMeetings.length === 0 ? (
+          <EmptyState text="No scheduled meetings found." />
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {scheduledMeetings.map((meeting) => (
+              <div key={meeting.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900">{meeting.title}</p>
+                    <p className="text-sm text-slate-500 mt-1">{meeting.agenda || "No agenda provided."}</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${meetingBadgeClass[meeting.status] || "bg-slate-100 text-slate-700"}`}>
+                    {meeting.status}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-700">
+                  <p><span className="font-semibold">Date:</span> {meeting.meeting_date}</p>
+                  <p><span className="font-semibold">Time:</span> {meeting.start_time || "-"} to {meeting.end_time || "-"}</p>
+                  <p><span className="font-semibold">Type:</span> {meeting.meeting_type || "-"}</p>
+                  <p><span className="font-semibold">Platform:</span> {meeting.meeting_platform || "-"}</p>
+                </div>
+
+                {meeting.meeting_link ? (
+                  <div className="mt-4">
+                    <a
+                      href={meeting.meeting_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex rounded-lg bg-[#355d91] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2c4c7c]"
+                    >
+                      Join Meeting
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  };
+
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-slate-300 text-[#1f2a44]">
+    <div className="h-screen w-screen flex overflow-hidden bg-[#cad6e6] text-[#1f2a44]">
       <Sidebar />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Topbar title="Team & Collaboration" showSearch />
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6">
-          {/* ================= STATS ================= */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {stats.map((c) => (
-              <div
-                key={c.t}
-                onClick={() => router.push(c.p)}
-                className={`cursor-pointer rounded-2xl p-4 text-white bg-gradient-to-r ${c.g} category-hover truncate`}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6 team-shell">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {cardConfig.map((card) => (
+              <button
+                key={card.key}
+                type="button"
+                onClick={() => {
+                  setActivePanel(card.key);
+                  setPanelError("");
+                  setPanelSuccess("");
+                  if (card.key !== "teams") {
+                    setSelectedTeamId(null);
+                    setSelectedTeam(null);
+                  }
+                }}
+                className={`card-tile bg-linear-to-r ${card.className} text-left ${activePanel === card.key ? "ring-4 ring-white/60" : ""}`}
               >
-                <div className="text-sm opacity-80 truncate">{c.t}</div>
-                <div className="text-3xl font-bold truncate">{c.v}</div>
-                <button className="mt-3 bg-white/20 px-3 py-1 rounded-lg text-sm hover:bg-white/30">
-                  View
-                </button>
-              </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm opacity-90">{card.title}</p>
+                    <p className="mt-1 text-3xl font-bold">{card.value}</p>
+                    <p className="mt-2 text-xs opacity-85">{card.description}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/20 p-3">{card.icon}</div>
+                </div>
+              </button>
             ))}
           </div>
 
-          {/* ================= CONTENT (UNCHANGED) ================= */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[60vh]">
-            {/* Left Column */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              <div
-                onClick={() => router.push("/project")}
-                className="glass rounded-2xl p-6 category-hover cursor-pointer"
-              >
-                <h2 className="font-semibold text-lg mb-1 truncate">
-                  AI Study Helper
-                </h2>
-                <p className="text-sm text-gray-600 truncate">
-                  Develop an AI assistant to help students with their studies.
-                </p>
-                <button className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                  View Details
-                </button>
-              </div>
+          {panelError ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{panelError}</div>
+          ) : null}
 
-              <div
-                onClick={() => router.push("/team/activity")}
-                className="glass rounded-2xl p-6 category-hover cursor-pointer flex-1"
-              >
-                <h3 className="font-semibold mb-4 truncate">
-                  Activity Feed
-                </h3>
+          {panelSuccess ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{panelSuccess}</div>
+          ) : null}
 
-                {[
-                  "Vikram Patel requested to join a team",
-                  "Priya Singh uploaded files",
-                  "Rohan Das created a new team",
-                  "Aditya Mehta accepted invite",
-                ].map((t, i) => (
-                  <div
-                    key={i}
-                    className="py-3 px-3 mb-2 rounded-lg text-sm category-hover bg-white/40 truncate"
-                  >
-                    {t}
-                  </div>
-                ))}
-
-                <button className="mt-3 text-blue-600 text-sm hover:underline">
-                  View All Activity →
-                </button>
-              </div>
-            </div>
-
-            {/* Right Column */}
-            <div className="flex flex-col gap-6">
-              <div
-                onClick={() => router.push("/team/groups")}
-                className="glass rounded-xl p-4 category-hover cursor-pointer"
-              >
-                <h3 className="font-medium mb-2 truncate">
-                  Group Study
-                </h3>
-                <div className="flex justify-between items-center gap-2">
-                  <span className="truncate">
-                    Algorithm & Data Structures
-                  </span>
-                  <button className="bg-amber-500 text-white px-3 py-1 rounded-lg shrink-0">
-                    Join
-                  </button>
-                </div>
-              </div>
-
-              <div className="glass rounded-xl p-4 category-hover">
-                <h3 className="font-medium mb-3 truncate">
-                  Quick Links
-                </h3>
-
-                {[
-                  { t: "Schedule Meeting", p: "/meetings" },
-                  { t: "Collaborate Tasks", p: "/team/tasks" },
-                  { t: "Browse Projects", p: "/project" },
-                ].map((i) => (
-                  <div
-                    key={i.t}
-                    onClick={() => router.push(i.p)}
-                    className="cursor-pointer flex justify-between items-center py-3 px-3 mb-2 rounded-lg text-sm bg-white/40 category-hover"
-                  >
-                    <span className="truncate">{i.t}</span>
-                    <button className="text-blue-600 hover:underline shrink-0">
-                      Manage
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div
-                onClick={() => router.push("/team/ratings")}
-                className="glass rounded-xl p-4 category-hover cursor-pointer"
-              >
-                <h3 className="font-medium mb-3 truncate">
-                  Peer Ratings
-                </h3>
-
-                {[
-                  { n: "Rahul Sharma", r: "4.8" },
-                  { n: "Anjali Kapoor", r: "4.7" },
-                  { n: "Sneha Verma", r: "4.6" },
-                ].map((u) => (
-                  <div
-                    key={u.n}
-                    className="flex justify-between items-center py-3 px-3 mb-2 rounded-lg text-sm bg-white/40 category-hover"
-                  >
-                    <span className="truncate">{u.n}</span>
-                    <span className="text-amber-500 font-medium shrink-0">
-                      {u.r}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          {teamDetailLoading ? <div className="workspace-card text-slate-500">Loading team workspace...</div> : renderActivePanel()}
         </main>
       </div>
 
+      {confirmMember ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">Remove Member?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Are you sure you want to remove <b>{confirmMember.enrollment_id}</b> from this team?
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmMember(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleRemoveMember()}
+                disabled={removing}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {removing ? "Removing..." : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <style jsx global>{`
-        .glass {
-          background: rgba(255, 255, 255, 0.7);
+        .team-shell {
+          background: radial-gradient(circle at 18% -14%, rgba(79, 131, 214, 0.18) 0%, rgba(202, 214, 230, 0.92) 42%, #cad6e6 100%);
+        }
+
+        .card-tile {
+          border-radius: 22px;
+          padding: 18px;
+          color: white;
+          box-shadow: 0 14px 30px rgba(48, 71, 110, 0.16);
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .card-tile:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 18px 36px rgba(48, 71, 110, 0.22);
+        }
+
+        .workspace-card {
+          background: rgba(255, 255, 255, 0.84);
           backdrop-filter: blur(14px);
-          border: 1px solid rgba(255, 255, 255, 0.4);
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-        }
-
-        .category-hover {
-          transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .category-hover:hover {
-          transform: translateY(-6px) scale(1.03);
-          box-shadow: 0 30px 60px rgba(0, 0, 0, 0.18);
+          border: 1px solid rgba(255, 255, 255, 0.55);
+          border-radius: 28px;
+          padding: 22px;
+          box-shadow: 0 18px 38px rgba(45, 66, 103, 0.11);
         }
       `}</style>
     </div>
   );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-2 text-base font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
+      {text}
+    </div>
+  );
+}
+
+function getMemberLabel(members: TeamMember[], userKey: string | null) {
+  if (!userKey) return "Unassigned";
+  const member = members.find((item) => item.enrollment_id === userKey);
+  return member?.name || member?.student_name || member?.enrollment_id || userKey;
 }

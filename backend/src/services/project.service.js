@@ -39,6 +39,7 @@ export const createProjectService = async ({
   description,
   track,
   techStack,
+  githubRepoUrl,
   requesterEnrollmentId,
 }) => {
   // 🔒 BASIC VALIDATION (UPDATED)
@@ -73,6 +74,7 @@ export const createProjectService = async ({
     description,
     track,        // ✅ now guaranteed non-null
     techStack,
+    githubRepoUrl,
   });
 
   // 🔔 Notify all team members
@@ -405,6 +407,7 @@ export const resubmitProjectService = async ({
   description,
   track,
   techStack,
+  githubRepoUrl,
   requestMentorChange,
   requesterEnrollmentId,
 }) => {
@@ -435,6 +438,7 @@ export const resubmitProjectService = async ({
     description,
     track,
     techStack,
+    githubRepoUrl,
   });
 
   // If student requests mentor change, set status to PENDING for admin reassignment
@@ -505,6 +509,7 @@ export const editProjectService = async ({
   description,
   track,
   techStack,
+  githubRepoUrl,
   requesterEnrollmentId,
 }) => {
   if (!projectId || !title || !description || !track) {
@@ -533,6 +538,7 @@ export const editProjectService = async ({
     description,
     track,
     techStack,
+    githubRepoUrl,
   });
 
   return {

@@ -6,6 +6,7 @@ import {
 import { registerNotificationDispatch } from '../repositories/trackerReminder.repo.js';
 import { pushNotification } from '../services/notification.service.js';
 import { getTrackerPolicySettingsService } from '../services/trackerPolicy.service.js';
+import { writeCronJobLog } from '../utils/cronLogger.js';
 
 const isEnabled = (value, fallback = true) => {
   if (value === undefined) return fallback;
@@ -106,11 +107,24 @@ export const startTrackerEscalationScheduler = () => {
   const intervalMs = intervalMin * 60 * 1000;
 
   const tick = async () => {
+    const startedAt = Date.now();
     try {
       const result = await runTrackerEscalationJob();
       console.log(`[TrackerEscalationJob] notified=${result.notified}, candidates=${result.candidates}`);
+      await writeCronJobLog({
+        job: 'trackerEscalation',
+        status: 'success',
+        durationMs: Date.now() - startedAt,
+        result,
+      });
     } catch (err) {
       console.error('[TrackerEscalationJob] failed:', err.message);
+      await writeCronJobLog({
+        job: 'trackerEscalation',
+        status: 'error',
+        durationMs: Date.now() - startedAt,
+        error: err,
+      });
     }
   };
 

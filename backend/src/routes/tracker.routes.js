@@ -180,7 +180,7 @@ router.get(
 router.get(
   '/projects/:projectId/status-history',
   authenticate,
-  allowRoles('MENTOR', 'ADMIN'),
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
   getProjectStatusHistory
 );
 

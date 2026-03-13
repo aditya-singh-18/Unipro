@@ -2,6 +2,7 @@
 
 import "./globals.css";
 import { AuthProvider } from "../store/auth.store";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,
@@ -14,6 +15,12 @@ export default function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          duration={6000}
+        />
       </body>
     </html>
   );
