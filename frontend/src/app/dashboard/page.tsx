@@ -298,7 +298,10 @@ export default function DashboardPage() {
             >
               <p className="tile-label">Project Status</p>
               <p className="tile-value">{trackerStats.total_projects} Active Projects</p>
-              <button className="tile-button">View</button>
+              <div className="tile-footer-row">
+                <button className="tile-button">View</button>
+                <span className="tile-chip">Live</span>
+              </div>
               <div className="wave-overlay" />
             </article>
 
@@ -308,7 +311,10 @@ export default function DashboardPage() {
             >
               <p className="tile-label">Pending Weeks</p>
               <p className="tile-value">{trackerStats.pending_weeks}</p>
-              <button className="tile-button">View</button>
+              <div className="tile-footer-row">
+                <button className="tile-button">View</button>
+                <span className="tile-chip">Tracker</span>
+              </div>
               <div className="wave-overlay" />
             </article>
 
@@ -321,7 +327,10 @@ export default function DashboardPage() {
             >
               <p className="tile-label">My Mentor</p>
               <p className="tile-value mentor-name">{mentorCardValue}</p>
-              <button className="tile-button">{assignedMentor ? "View Profile" : "Pending"}</button>
+              <div className="tile-footer-row">
+                <button className="tile-button">{assignedMentor ? "View Profile" : "Pending"}</button>
+                <span className="tile-chip">Faculty</span>
+              </div>
             </article>
 
             <article
@@ -330,7 +339,10 @@ export default function DashboardPage() {
             >
               <p className="tile-label">Risk Alerts</p>
               <p className="tile-value">{trackerStats.high_risk_projects} Issues</p>
-              <button className="tile-button">{trackerStats.rejected_weeks} rejected weeks</button>
+              <div className="tile-footer-row">
+                <button className="tile-button">{trackerStats.rejected_weeks} rejected weeks</button>
+                <span className="tile-chip">Priority</span>
+              </div>
             </article>
           </section>
 
@@ -532,13 +544,13 @@ export default function DashboardPage() {
 
         .tile-card {
           position: relative;
-          min-block-size: 88px;
-          border-radius: 14px;
-          padding: 12px;
+          min-block-size: 77px;
+          border-radius: 16px;
+          padding: 11px;
           color: #f8fbff;
           cursor: pointer;
           overflow: hidden;
-          box-shadow: 0 10px 16px rgba(26, 44, 80, 0.2);
+          box-shadow: 0 12px 20px rgba(26, 44, 80, 0.2);
           transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
 
@@ -548,34 +560,57 @@ export default function DashboardPage() {
         }
 
         .tile-label {
-          font-size: 0.85rem;
+          font-size: 0.78rem;
           font-weight: 600;
           opacity: 0.95;
         }
 
         .tile-value {
           margin-block-start: 4px;
-          font-size: 1.15rem;
+          font-size: 1rem;
           line-height: 1.1;
           font-weight: 700;
+          max-inline-size: 90%;
         }
 
         .mentor-name {
-          font-size: 1.2rem;
+          font-size: 1.06rem;
+        }
+
+        .tile-footer-row {
+          margin-block-start: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
         }
 
         .tile-button {
-          margin-block-start: 8px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 5px 10px;
+          padding: 4px 10px;
           border-radius: 999px;
-          font-size: 0.75rem;
+          font-size: 0.7rem;
           font-weight: 600;
           background: rgba(255, 255, 255, 0.22);
           backdrop-filter: blur(4px);
           transition: background 0.2s ease;
+        }
+
+        .tile-chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-inline-size: 54px;
+          padding: 4px 8px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.14);
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          font-size: 0.67rem;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
         }
 
         .tile-button:hover {
@@ -585,9 +620,9 @@ export default function DashboardPage() {
         .wave-overlay {
           position: absolute;
           inline-size: 140%;
-          block-size: 72px;
+          block-size: 62px;
           border-radius: 50%;
-          inset-block-end: -48px;
+          inset-block-end: -42px;
           inset-inline-start: -20%;
           background: rgba(255, 255, 255, 0.16);
         }
@@ -968,7 +1003,7 @@ export default function DashboardPage() {
         @media (max-inline-size: 767px) {
           .tile-value,
           .mentor-name {
-            font-size: 1.65rem;
+            font-size: 1.18rem;
           }
 
           .panel-title {

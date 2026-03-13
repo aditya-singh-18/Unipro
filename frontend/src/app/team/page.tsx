@@ -5,8 +5,11 @@ import {
   ArrowLeft,
   CalendarDays,
   Mail,
+  PencilLine,
   Plus,
+  Save,
   Users,
+  X,
 } from "lucide-react";
 
 import Sidebar from "@/components/sidebar/StudentSidebar";
@@ -43,6 +46,8 @@ type TeamMember = {
   is_leader: boolean;
   name?: string;
   student_name?: string;
+  full_name?: string;
+  display_name?: string;
 };
 
 type TeamSummary = {
@@ -129,6 +134,13 @@ export default function TeamDashboard() {
   const [removing, setRemoving] = useState(false);
   const [confirmLeaderTransfer, setConfirmLeaderTransfer] = useState<TeamMember | null>(null);
   const [changingLeaderId, setChangingLeaderId] = useState<string | null>(null);
+  const [teamEditMode, setTeamEditMode] = useState(false);
+  const [teamInfoEditOpen, setTeamInfoEditOpen] = useState(false);
+  const [teamInfoDraft, setTeamInfoDraft] = useState({
+    team_name: "",
+    project_title: "",
+    max_team_size: 0,
+  });
   const [teamPolicy, setTeamPolicy] = useState({
     team_leader_required: true,
     allow_leader_change: false,
@@ -250,11 +262,27 @@ export default function TeamDashboard() {
     if (!selectedTeamId) {
       setSelectedTeam(null);
       setKanbanTasks([]);
+      setTeamEditMode(false);
+      setTeamInfoEditOpen(false);
       return;
     }
 
     void loadTeamWorkspace(selectedTeamId);
   }, [selectedTeamId, loadTeamWorkspace, token, user?.role]);
+
+  useEffect(() => {
+    if (!selectedTeam) {
+      setTeamInfoDraft({ team_name: "", project_title: "", max_team_size: 0 });
+      return;
+    }
+
+    setTeamInfoDraft({
+      team_name: selectedTeam.team_name || "",
+      project_title: selectedTeam.project_title || "",
+      max_team_size: selectedTeam.max_team_size,
+    });
+    setTeamInfoEditOpen(false);
+  }, [selectedTeam]);
 
   const loadKanbanTasks = async (projectId: string) => {
     try {
@@ -403,6 +431,38 @@ export default function TeamDashboard() {
     }
   };
 
+  const saveTeamInfoLocal = () => {
+    if (!selectedTeam) return;
+
+    const parsedMaxSize = Number(teamInfoDraft.max_team_size);
+    const normalizedMaxSize = Number.isFinite(parsedMaxSize)
+      ? Math.max(selectedTeam.members.length, parsedMaxSize)
+      : selectedTeam.max_team_size;
+
+    const updatedTeam: TeamDetail = {
+      ...selectedTeam,
+      team_name: teamInfoDraft.team_name.trim() || selectedTeam.team_name,
+      project_title: teamInfoDraft.project_title.trim() || selectedTeam.project_title,
+      max_team_size: normalizedMaxSize,
+    };
+
+    setSelectedTeam(updatedTeam);
+    setTeams((prev) =>
+      prev.map((team) =>
+        team.team_id === updatedTeam.team_id
+          ? {
+              ...team,
+              team_name: updatedTeam.team_name,
+              project_title: updatedTeam.project_title,
+              max_team_size: updatedTeam.max_team_size,
+            }
+          : team
+      )
+    );
+    setTeamInfoEditOpen(false);
+    setPanelSuccess("Team details updated");
+  };
+
   const scheduledMeetings = useMemo(
     () => meetings.filter((item) => item.status === "scheduled"),
     [meetings]
@@ -447,9 +507,20 @@ export default function TeamDashboard() {
     if (activePanel === "teams") {
       if (selectedTeamId && selectedTeam) {
         const projectId = String(selectedTeam.projects?.[0]?.project_id || "");
-        const isLeader = !!myId && selectedTeam.leader_enrollment_id.trim() === myId;
+        const currentEnrollment = (myId || user?.enrollmentId || user?.userKey || "").trim();
+        const isLeader = !!currentEnrollment && selectedTeam.leader_enrollment_id.trim() === currentEnrollment;
+        const linkedProject = selectedTeam.projects?.[0];
+        const normalizedProjectStatus = String(linkedProject?.status || "").toLowerCase().trim();
+        const isProjectActive = normalizedProjectStatus === "active";
+        const canEditTeam = isLeader && !isProjectActive;
         const allowLeaderChange =
           teamPolicy.team_leader_required && teamPolicy.allow_leader_change;
+        const doneTasks = kanbanTasks.filter((task) => task.status === "done").length;
+        const totalTasks = kanbanTasks.length;
+        const completionPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+        const occupancyPct = Math.round(
+          (selectedTeam.members.length / Math.max(1, selectedTeam.max_team_size)) * 100
+        );
 
         return (
           <section className="workspace-card space-y-6">
@@ -461,6 +532,7 @@ export default function TeamDashboard() {
                     setSelectedTeamId(null);
                     setSelectedTeam(null);
                     setKanbanTasks([]);
+                    setTeamEditMode(false);
                     router.replace("/team");
                   }}
                   className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -469,9 +541,8 @@ export default function TeamDashboard() {
                   Back To My Teams
                 </button>
                 <h2 className="mt-4 text-2xl font-bold text-slate-900">
-                  {selectedTeam.team_name || `Team ${selectedTeam.team_id}`}
+                  Team Workspace
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">All team work is managed here now.</p>
               </div>
 
               <div className="rounded-2xl bg-linear-to-br from-indigo-100 to-blue-100 p-4 shrink-0">
@@ -479,10 +550,109 @@ export default function TeamDashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <MetricCard label="Department" value={selectedTeam.department} />
-              <MetricCard label="Team Size" value={`${selectedTeam.members.length}/${selectedTeam.max_team_size}`} />
-              <MetricCard label="Project" value={selectedTeam.project_title || "Not linked yet"} />
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    {selectedTeam.team_name || "Unnamed team"}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    {selectedTeam.team_id}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    {selectedTeam.department}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    {selectedTeam.members.length}/{selectedTeam.max_team_size}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    {selectedTeam.project_title || "No project title"}
+                  </span>
+                </div>
+
+                {isLeader ? (
+                  <button
+                    type="button"
+                    disabled={!canEditTeam}
+                    onClick={() => {
+                      if (!canEditTeam) return;
+                      setTeamInfoEditOpen((prev) => !prev);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {canEditTeam ? (teamInfoEditOpen ? <X size={16} /> : <PencilLine size={16} />) : <PencilLine size={16} />}
+                    {canEditTeam ? (teamInfoEditOpen ? "Close" : "Edit") : "Edit Locked"}
+                  </button>
+                ) : null}
+              </div>
+
+              {teamInfoEditOpen && canEditTeam ? (
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <input
+                    value={teamInfoDraft.team_name}
+                    onChange={(e) => setTeamInfoDraft((prev) => ({ ...prev, team_name: e.target.value }))}
+                    placeholder="Team name"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                  <input
+                    value={teamInfoDraft.project_title}
+                    onChange={(e) => setTeamInfoDraft((prev) => ({ ...prev, project_title: e.target.value }))}
+                    placeholder="Project title"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                  <input
+                    type="number"
+                    min={selectedTeam.members.length}
+                    value={teamInfoDraft.max_team_size}
+                    onChange={(e) =>
+                      setTeamInfoDraft((prev) => ({ ...prev, max_team_size: Number(e.target.value || 0) }))
+                    }
+                    placeholder="Team size"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                  <div className="md:col-span-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={saveTeamInfoLocal}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      <Save size={14} />
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h3 className="text-lg font-semibold text-slate-900">Team Tracker</h3>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 border border-slate-200">
+                  {normalizedProjectStatus || "not_started"}
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+                    <span>Team Filled</span>
+                    <span>{selectedTeam.members.length}/{selectedTeam.max_team_size}</span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-slate-200">
+                    <div className="h-full rounded-full bg-blue-500" style={{ inlineSize: `${Math.min(100, occupancyPct)}%` }} />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+                    <span>Tasks Completed</span>
+                    <span>{doneTasks}/{totalTasks}</span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-slate-200">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ inlineSize: `${Math.min(100, completionPct)}%` }} />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
@@ -490,31 +660,54 @@ export default function TeamDashboard() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Team Members</h3>
                   <p className="text-sm text-slate-500">
-                    Member actions follow admin policies.{" "}
+                    {isLeader && isProjectActive ? (
+                      <span className="font-medium text-amber-700">
+                        Project is active. Team edit is locked.
+                      </span>
+                    ) : isLeader && teamEditMode ? (
+                      <span className="font-medium text-emerald-700">Member edit mode is enabled.</span>
+                    ) : isLeader ? (
+                      <span>Click Edit Members to manage team members.</span>
+                    ) : (
+                      <span>Only team leader can edit team structure.</span>
+                    )}{" "}
                     {isLeader && teamPolicy.team_leader_required && !teamPolicy.allow_leader_change ? (
                       <span className="font-medium text-amber-600">
                         Leader transfer is currently disabled by admin.
                       </span>
-                    ) : isLeader && teamPolicy.allow_leader_change ? (
-                      <span>Transfer leader is available.</span>
-                    ) : (
-                      <span>Transfer leader is available only when enabled by admin.</span>
-                    )}
+                    ) : null}
                   </p>
                 </div>
+
+                {isLeader ? (
+                  <button
+                    type="button"
+                    disabled={!canEditTeam}
+                    onClick={() => setTeamEditMode((prev) => !prev)}
+                    className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {canEditTeam
+                      ? teamEditMode
+                        ? "Done Editing"
+                        : "Edit Members"
+                      : "Edit Locked (Project Active)"}
+                  </button>
+                ) : null}
               </div>
 
               <div className="space-y-3">
                 {selectedTeam.members.map((member) => {
-                  const removable = isLeader && teamPolicy.allow_member_removal && !member.is_leader;
-                  const transferable = isLeader && allowLeaderChange && !member.is_leader;
+                  const removable =
+                    canEditTeam && teamEditMode && teamPolicy.allow_member_removal && !member.is_leader;
+                  const transferable =
+                    canEditTeam && teamEditMode && allowLeaderChange && !member.is_leader;
                   return (
                     <div
                       key={member.enrollment_id}
                       className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${member.is_leader ? "border-indigo-300 bg-indigo-50" : "border-slate-200 bg-white"}`}
                     >
                       <div>
-                        <p className="font-semibold text-slate-900">{member.name || member.student_name || member.enrollment_id}</p>
+                        <p className="font-semibold text-slate-900">{getMemberDisplayName(member)}</p>
                         <p className="text-xs text-slate-500">{member.enrollment_id}</p>
                         {member.is_leader && <p className="text-xs font-semibold text-indigo-600 mt-1">Team Leader</p>}
                       </div>
@@ -552,7 +745,7 @@ export default function TeamDashboard() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Team Task Kanban</h3>
                   <p className="text-sm text-slate-500">
-                    {projectId ? `Linked to project ${projectId}` : "Project create hone ke baad board yahan auto-enable ho jayega."}
+                    {projectId ? `Project ${projectId}` : "Project link required"}
                   </p>
                 </div>
 
@@ -569,17 +762,17 @@ export default function TeamDashboard() {
 
               {projectId ? (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-12">
                     <input
                       value={taskForm.title}
                       onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
                       placeholder="Task title"
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 lg:col-span-4"
                     />
                     <select
                       value={taskForm.priority}
                       onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as TrackerTaskPriority }))}
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 lg:col-span-3"
                     >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
@@ -589,12 +782,12 @@ export default function TeamDashboard() {
                     <select
                       value={taskForm.assignedToUserKey}
                       onChange={(e) => setTaskForm((prev) => ({ ...prev, assignedToUserKey: e.target.value }))}
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 lg:col-span-3"
                     >
                       <option value="">Unassigned</option>
                       {selectedTeam.members.map((member) => (
                         <option key={member.enrollment_id} value={member.enrollment_id}>
-                          {member.name || member.student_name || member.enrollment_id}
+                          {getMemberDisplayName(member)} ({member.enrollment_id})
                         </option>
                       ))}
                     </select>
@@ -602,56 +795,58 @@ export default function TeamDashboard() {
                       type="button"
                       onClick={createKanbanTask}
                       disabled={kanbanSaving}
-                      className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 lg:col-span-2"
                     >
                       {kanbanSaving ? "Adding..." : "Add Task"}
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-                    {boardColumns.map((column) => {
-                      const columnTasks = kanbanTasks.filter((task) => task.status === column.key);
-                      return (
-                        <div key={column.key} className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3 min-h-60">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-semibold text-slate-700">{column.title}</h4>
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                              {columnTasks.length}
-                            </span>
-                          </div>
-
-                          {kanbanLoading ? (
-                            <p className="text-xs text-slate-400">Loading tasks...</p>
-                          ) : columnTasks.length === 0 ? (
-                            <p className="text-xs text-slate-400">No tasks</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {columnTasks.map((task) => (
-                                <div key={task.task_id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                                  <div className="text-sm font-semibold text-slate-900">{task.title}</div>
-                                  <div className="text-[11px] text-slate-500">Priority: {task.priority}</div>
-                                  <div className="text-[11px] text-slate-500">
-                                    Assignee: {getMemberLabel(selectedTeam.members, task.assigned_to_user_key)}
-                                  </div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {nextMoves[task.status].map((nextStatus) => (
-                                      <button
-                                        key={nextStatus}
-                                        type="button"
-                                        onClick={() => void moveKanbanTask(task.task_id, nextStatus)}
-                                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-                                      >
-                                        {nextStatus}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
+                  <div className="overflow-x-auto pb-1">
+                    <div className="grid min-w-280 grid-cols-5 gap-4">
+                      {boardColumns.map((column) => {
+                        const columnTasks = kanbanTasks.filter((task) => task.status === column.key);
+                        return (
+                          <div key={column.key} className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3 min-h-56">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-semibold text-slate-700">{column.title}</h4>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                                {columnTasks.length}
+                              </span>
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+
+                            {kanbanLoading ? (
+                              <p className="text-xs text-slate-400">Loading tasks...</p>
+                            ) : columnTasks.length === 0 ? (
+                              <p className="text-xs text-slate-400">No tasks</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {columnTasks.map((task) => (
+                                  <div key={task.task_id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                    <div className="text-sm font-semibold text-slate-900">{task.title}</div>
+                                    <div className="text-[11px] text-slate-500">Priority: {task.priority}</div>
+                                    <div className="text-[11px] text-slate-500">
+                                      Assignee: {getMemberLabel(selectedTeam.members, task.assigned_to_user_key)}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {nextMoves[task.status].map((nextStatus) => (
+                                        <button
+                                          key={nextStatus}
+                                          type="button"
+                                          onClick={() => void moveKanbanTask(task.task_id, nextStatus)}
+                                          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                                        >
+                                          Move to {nextStatus}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               ) : null}
@@ -665,7 +860,7 @@ export default function TeamDashboard() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">My Teams</h2>
-              <p className="text-sm text-slate-500 mt-1">Card pe click karte hi team workspace yahin niche open hoga.</p>
+              <p className="text-sm text-slate-500 mt-1">Select a team card to open its workspace below.</p>
             </div>
 
             <button
@@ -690,6 +885,7 @@ export default function TeamDashboard() {
                   onClick={() => {
                     setSelectedTeamId(team.team_id);
                     router.replace(`/team?teamId=${team.team_id}`);
+                    setTeamEditMode(false);
                     setPanelError("");
                     setPanelSuccess("");
                   }}
@@ -718,7 +914,7 @@ export default function TeamDashboard() {
         <section className="workspace-card space-y-5">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">New Invitations</h2>
-            <p className="text-sm text-slate-500 mt-1">Ab ye page alag nahi khulega. Sab kuch yahin handle hoga.</p>
+            <p className="text-sm text-slate-500 mt-1">Review and respond to team invitations from this panel.</p>
           </div>
 
           {loading ? (
@@ -767,7 +963,6 @@ export default function TeamDashboard() {
         <section className="workspace-card space-y-5">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">Send Invite</h2>
-            <p className="text-sm text-slate-500 mt-1">Invite flow bhi ab isi page ke niche open hoga.</p>
           </div>
 
           <form onSubmit={handleSendInvite} className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -807,7 +1002,6 @@ export default function TeamDashboard() {
       <section className="workspace-card space-y-5">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Meetings</h2>
-          <p className="text-sm text-slate-500 mt-1">Meeting card ab directly student meetings data se connected hai.</p>
         </div>
 
         {loading ? (
@@ -863,7 +1057,7 @@ export default function TeamDashboard() {
         <Topbar title="Team & Collaboration" showSearch />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6 team-shell">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {cardConfig.map((card) => (
               <button
                 key={card.key}
@@ -875,6 +1069,7 @@ export default function TeamDashboard() {
                   if (card.key !== "teams") {
                     setSelectedTeamId(null);
                     setSelectedTeam(null);
+                    setTeamEditMode(false);
                   }
                 }}
                 className={`card-tile bg-linear-to-r ${card.className} text-left ${activePanel === card.key ? "ring-4 ring-white/60" : ""}`}
@@ -882,10 +1077,10 @@ export default function TeamDashboard() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm opacity-90">{card.title}</p>
-                    <p className="mt-1 text-3xl font-bold">{card.value}</p>
-                    <p className="mt-2 text-xs opacity-85">{card.description}</p>
+                    <p className="mt-1 text-2xl font-bold leading-tight">{card.value}</p>
+                    <p className="mt-1 text-xs opacity-85">{card.description}</p>
                   </div>
-                  <div className="rounded-xl bg-white/20 p-3">{card.icon}</div>
+                  <div className="rounded-xl bg-white/20 p-2.5">{card.icon}</div>
                 </div>
               </button>
             ))}
@@ -976,7 +1171,7 @@ export default function TeamDashboard() {
 
         .card-tile {
           border-radius: 22px;
-          padding: 18px;
+          padding: 14px;
           color: white;
           box-shadow: 0 14px 30px rgba(48, 71, 110, 0.16);
           transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -1000,15 +1195,6 @@ export default function TeamDashboard() {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-base font-semibold text-slate-900">{value}</p>
-    </div>
-  );
-}
-
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
@@ -1017,8 +1203,13 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+function getMemberDisplayName(member: TeamMember) {
+  return member.name || member.student_name || member.full_name || member.display_name || "Student";
+}
+
 function getMemberLabel(members: TeamMember[], userKey: string | null) {
   if (!userKey) return "Unassigned";
   const member = members.find((item) => item.enrollment_id === userKey);
-  return member?.name || member?.student_name || member?.enrollment_id || userKey;
+  if (!member) return userKey;
+  return `${getMemberDisplayName(member)} (${member.enrollment_id})`;
 }
