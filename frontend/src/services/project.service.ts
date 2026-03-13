@@ -1,6 +1,21 @@
 import axios from '@/lib/axios';
 import { MyProjectsResponse, CreateProjectPayload } from '@/types/project';
 
+export interface MentorAssignedProject {
+  project_id: number | string;
+  title: string;
+  description?: string;
+  tech_stack?: string[];
+  status: string;
+  created_at: string;
+  approved_at?: string | null;
+}
+
+export interface MentorAssignedProjectsResponse {
+  count: number;
+  projects: MentorAssignedProject[];
+}
+
 /**
  * STUDENT: Get My Projects
  * GET /project/my-projects
@@ -40,5 +55,14 @@ export const updateProject = async (
   payload: Omit<CreateProjectPayload, 'teamId'>
 ) => {
   const response = await axios.put(`/project/${projectId}/edit`, payload);
+  return response.data;
+};
+
+/**
+ * MENTOR: Get assigned projects
+ * GET /project/mentor/assigned
+ */
+export const getMentorAssignedProjects = async (): Promise<MentorAssignedProjectsResponse> => {
+  const response = await axios.get<MentorAssignedProjectsResponse>('/project/mentor/assigned');
   return response.data;
 };
