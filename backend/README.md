@@ -11,6 +11,7 @@ Run tracker migrations once, in chronological order.
 5. `migrations/20260312_tracker_phase4_policy_settings.sql`
 6. `migrations/20260313_admin_system_settings.sql`
 7. `migrations/20260313_team_member_change_log.sql`
+8. `migrations/20260313_mentor_assignment_foundation.sql`
 
 Optional (only if bio feature is needed):
 
@@ -37,6 +38,7 @@ node scripts/applyMigration.mjs migrations/20260312_tracker_phase3_escalation_in
 node scripts/applyMigration.mjs migrations/20260312_tracker_phase4_policy_settings.sql
 node scripts/applyMigration.mjs migrations/20260313_admin_system_settings.sql
 node scripts/applyMigration.mjs migrations/20260313_team_member_change_log.sql
+node scripts/applyMigration.mjs migrations/20260313_mentor_assignment_foundation.sql
 ```
 
 Optional:

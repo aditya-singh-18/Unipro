@@ -28,6 +28,11 @@ import {
 import { findUserByIdentifier, findUserByEnrollmentId } from '../repositories/user.repo.js';
 import { pushNotification } from './notification.service.js';
 import { getPublicSystemAccessService } from './systemSettings.service.js';
+import {
+  approveRecommendedMentorService,
+  runMentorAssignmentOrchestratorService,
+} from './mentorAssignmentOrchestrator.service.js';
+import { assignProjectMentorService } from './projectAssignment.service.js';
 
 
 
@@ -98,9 +103,17 @@ export const createProjectService = async ({
     }
   }
 
+  const orchestration = await runMentorAssignmentOrchestratorService({
+    projectId: teamId,
+    actorUserKey: requesterEnrollmentId,
+    source: 'create_project',
+  });
+
   return {
     project_id: teamId,
-    status: 'PENDING',
+    status: orchestration.status || 'PENDING',
+    mentor_assignment_mode: orchestration.mode,
+    mentor_assignment_action: orchestration.action,
   };
 };
 
@@ -156,56 +169,22 @@ export const adminAssignMentorService = async ({
   projectId,
   mentorEmployeeId,
 }) => {
-  if (!projectId || !mentorEmployeeId) {
-    throw new Error('projectId and mentorEmployeeId are required');
-  }
-
-  const project = await findProjectById(projectId);
-  if (!project) {
-    throw new Error('Project not found');
-  }
-
-  if (project.status !== 'PENDING') {
-    throw new Error(
-      `Mentor cannot be assigned in status ${project.status}`
-    );
-  }
-
-  await assignMentorToProject({
+  return assignProjectMentorService({
     projectId,
     mentorEmployeeId,
   });
+};
 
-  // 🔔 Notify team members about mentor assignment
-  const members = await getTeamMembers(projectId);
-  for (const member of members) {
-    const user = await findUserByEnrollmentId(member.enrollment_id);
-    if (user && user.user_key) {
-      await pushNotification({
-        userKey: user.user_key,
-        role: 'student',
-        title: '👨‍🏫 Mentor Assigned',
-        message: `Your project has been assigned to a mentor for review`,
-      });
-    }
-  }
-
-  // 🔔 Notify the mentor
-  const mentor = await findUserByIdentifier(mentorEmployeeId);
-  if (mentor) {
-    await pushNotification({
-      userKey: mentor.user_key,
-      role: 'mentor',
-      title: '📝 New Project Assigned',
-      message: `You have been assigned a new project to review`,
-    });
-  }
-
-  return {
-    project_id: projectId,
-    mentor_employee_id: mentorEmployeeId,
-    status: 'ASSIGNED_TO_MENTOR',
-  };
+export const adminApproveRecommendedMentorService = async ({
+  projectId,
+  mentorEmployeeId,
+  adminUserKey,
+}) => {
+  return approveRecommendedMentorService({
+    projectId,
+    mentorEmployeeId,
+    adminUserKey,
+  });
 };
 
 /* =========================
@@ -500,10 +479,21 @@ export const resubmitProjectService = async ({
     }
   }
 
+  let orchestration = null;
+  if (requestMentorChange) {
+    orchestration = await runMentorAssignmentOrchestratorService({
+      projectId,
+      actorUserKey: requesterEnrollmentId,
+      source: 'resubmit_project',
+    });
+  }
+
   return {
     project_id: projectId,
-    status: newStatus,
+    status: orchestration?.status || newStatus,
     mentor_change_requested: requestMentorChange || false,
+    mentor_assignment_mode: orchestration?.mode || null,
+    mentor_assignment_action: orchestration?.action || null,
   };
 };
 

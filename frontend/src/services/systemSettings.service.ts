@@ -10,6 +10,11 @@ export type AdminSystemSettings = {
   allow_mentor_login: boolean;
   allow_team_creation: boolean;
   allow_project_creation: boolean;
+  mentor_assignment_mode: 'manual_only' | 'recommendation_required' | 'auto_assign';
+  mentor_auto_assign_threshold: number;
+  mentor_default_max_active_projects: number;
+  mentor_recommendation_top_n: number;
+  mentor_load_balance_enabled: boolean;
 
   max_projects_per_student: number;
   max_projects_per_team: number;

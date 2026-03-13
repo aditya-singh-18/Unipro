@@ -1,6 +1,45 @@
 import pool from '../config/db.js';
 
+let mentorProfileColumns = null;
+
+const getMentorProfileColumns = async () => {
+  if (mentorProfileColumns) {
+    return mentorProfileColumns;
+  }
+
+  const query = `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'mentor_profiles'
+  `;
+
+  const { rows } = await pool.query(query);
+  mentorProfileColumns = new Set(rows.map((row) => row.column_name));
+  return mentorProfileColumns;
+};
+
+const getMentorAssignmentSelectFields = async (alias = 'mp') => {
+  const columns = await getMentorProfileColumns();
+
+  return {
+    availableForAssignment: columns.has('available_for_assignment')
+      ? `${alias}.available_for_assignment`
+      : 'TRUE AS available_for_assignment',
+    maxActiveProjects: columns.has('max_active_projects')
+      ? `${alias}.max_active_projects`
+      : '5 AS max_active_projects',
+    assignmentPriority: columns.has('assignment_priority')
+      ? `${alias}.assignment_priority`
+      : '100 AS assignment_priority',
+    lastAssignedAt: columns.has('last_assigned_at')
+      ? `${alias}.last_assigned_at`
+      : 'NULL::timestamp AS last_assigned_at',
+  };
+};
+
 const getMentorProfileRecord = async (employeeId) => {
+  const assignmentFields = await getMentorAssignmentSelectFields('mp');
+
   const mentorQuery = `
     SELECT 
       mp.employee_id,
@@ -11,6 +50,10 @@ const getMentorProfileRecord = async (employeeId) => {
       mp.contact_number,
       mp.is_active,
       mp.primary_track,
+      ${assignmentFields.availableForAssignment},
+      ${assignmentFields.maxActiveProjects},
+      ${assignmentFields.assignmentPriority},
+      ${assignmentFields.lastAssignedAt},
       COALESCE(mp.secondary_tracks, '[]'::jsonb) AS secondary_tracks,
       mp.created_at,
       mp.updated_at
@@ -71,13 +114,37 @@ export const getMentorProfileForStudentService = async (studentEnrollmentId, men
 };
 
 export const updateMentorProfileService = async (employeeId, payload) => {
+  const columns = await getMentorProfileColumns();
   const {
     department,
     designation,
     contact_number,
     primary_track,
     secondary_tracks,
+    available_for_assignment,
+    max_active_projects,
+    assignment_priority,
   } = payload;
+
+  const availableForAssignmentValue = columns.has('available_for_assignment')
+    ? available_for_assignment ?? null
+    : null;
+  const maxActiveProjectsValue = columns.has('max_active_projects')
+    ? max_active_projects ?? null
+    : null;
+  const assignmentPriorityValue = columns.has('assignment_priority')
+    ? assignment_priority ?? null
+    : null;
+  const availableForAssignmentSet = columns.has('available_for_assignment')
+    ? 'available_for_assignment = COALESCE($6, available_for_assignment),'
+    : '';
+  const maxActiveProjectsSet = columns.has('max_active_projects')
+    ? 'max_active_projects = COALESCE($7, max_active_projects),'
+    : '';
+  const assignmentPrioritySet = columns.has('assignment_priority')
+    ? 'assignment_priority = COALESCE($8, assignment_priority),'
+    : '';
+  const assignmentFields = await getMentorAssignmentSelectFields();
 
   const query = `
     UPDATE mentor_profiles
@@ -87,8 +154,11 @@ export const updateMentorProfileService = async (employeeId, payload) => {
       contact_number = COALESCE($3, contact_number),
       primary_track = COALESCE($4, primary_track),
       secondary_tracks = COALESCE($5::jsonb, secondary_tracks),
+      ${availableForAssignmentSet}
+      ${maxActiveProjectsSet}
+      ${assignmentPrioritySet}
       updated_at = CURRENT_TIMESTAMP
-    WHERE employee_id = $6
+    WHERE employee_id = $9
     RETURNING
       employee_id,
       full_name,
@@ -98,6 +168,10 @@ export const updateMentorProfileService = async (employeeId, payload) => {
       contact_number,
       is_active,
       primary_track,
+      ${assignmentFields.availableForAssignment},
+      ${assignmentFields.maxActiveProjects},
+      ${assignmentFields.assignmentPriority},
+      ${assignmentFields.lastAssignedAt},
       COALESCE(secondary_tracks, '[]'::jsonb) AS secondary_tracks,
       created_at,
       updated_at
@@ -112,6 +186,9 @@ export const updateMentorProfileService = async (employeeId, payload) => {
     contact_number ?? null,
     primary_track ?? null,
     safeSecondaryTracks,
+    availableForAssignmentValue,
+    maxActiveProjectsValue,
+    assignmentPriorityValue,
     employeeId,
   ]);
 
@@ -270,6 +347,8 @@ export const deleteMentorSkillService = async (employeeId, id) => {
    ADMIN: ACTIVE MENTORS
 ========================= */
 export const getActiveMentorsService = async () => {
+  const assignmentFields = await getMentorAssignmentSelectFields('mp');
+
   const query = `
     SELECT
       mp.employee_id,
@@ -280,6 +359,10 @@ export const getActiveMentorsService = async () => {
       mp.contact_number,
       mp.is_active,
       mp.primary_track,
+      ${assignmentFields.availableForAssignment},
+      ${assignmentFields.maxActiveProjects},
+      ${assignmentFields.assignmentPriority},
+      ${assignmentFields.lastAssignedAt},
       COALESCE(mp.secondary_tracks, '[]'::jsonb) AS secondary_tracks,
       mp.created_at,
       COUNT(DISTINCT p.project_id) as assigned_projects,
@@ -307,5 +390,8 @@ export const getActiveMentorsService = async () => {
   `;
 
   const { rows } = await pool.query(query);
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    assigned_projects: Number(row.assigned_projects || 0),
+  }));
 };

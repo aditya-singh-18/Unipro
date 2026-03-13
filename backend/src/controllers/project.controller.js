@@ -2,6 +2,7 @@ import { createProjectService } from '../services/project.service.js';
 import { mentorReviewProjectService } from '../services/project.service.js';
 import { getPendingProjectsService } from '../services/project.service.js';
 import { adminAssignMentorService } from '../services/project.service.js';
+import { adminApproveRecommendedMentorService } from '../services/project.service.js';
 import { getMentorAssignedProjectsService } from '../services/project.service.js';
 import { getMentorRejectedProjectsHistoryService } from '../services/project.service.js';
 import { revokeRejectedProjectDecisionService } from '../services/project.service.js';
@@ -10,6 +11,7 @@ import { editProjectService } from '../services/project.service.js';
 import { activateProjectService } from '../services/project.service.js';
 import { getMyProjectsService } from '../services/project.service.js';
 import { getProjectDetailService } from '../services/project.service.js';
+import { getMentorRecommendationsForProjectService } from '../services/mentorRecommendation.service.js';
 
 
 export const createProject = async (req, res) => {
@@ -103,6 +105,53 @@ export const adminAssignMentor = async (req, res) => {
     });
   } catch (error) {
     return res.status(400).json({
+      message: error.message,
+    });
+  }
+};
+
+export const getProjectMentorRecommendations = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const refresh = String(req.query.refresh || 'false').toLowerCase() === 'true';
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+
+    const result = await getMentorRecommendationsForProjectService({
+      projectId,
+      refresh,
+      limit,
+    });
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const approveRecommendedMentor = async (req, res) => {
+  try {
+    const { projectId, mentorEmployeeId } = req.body;
+
+    const result = await adminApproveRecommendedMentorService({
+      projectId,
+      mentorEmployeeId,
+      adminUserKey: req.user.user_key,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Recommended mentor approved successfully',
+      ...result,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
       message: error.message,
     });
   }

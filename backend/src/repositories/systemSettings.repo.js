@@ -7,6 +7,24 @@ const JSONB_FIELDS = new Set([
   'allowed_file_types',
 ]);
 
+let adminSystemSettingsColumns = null;
+
+const getAdminSystemSettingsColumns = async () => {
+  if (adminSystemSettingsColumns) {
+    return adminSystemSettingsColumns;
+  }
+
+  const q = `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'admin_system_settings'
+  `;
+
+  const { rows } = await pool.query(q);
+  adminSystemSettingsColumns = new Set(rows.map((row) => row.column_name));
+  return adminSystemSettingsColumns;
+};
+
 export const getSystemSettings = async () => {
   const q = `
     SELECT *
@@ -25,17 +43,24 @@ export const updateSystemSettings = async ({ payload, updatedBy }) => {
     return await getSystemSettings();
   }
 
-  const setClauses = keys.map((key, idx) =>
+  const supportedColumns = await getAdminSystemSettingsColumns();
+  const filteredKeys = keys.filter((key) => supportedColumns.has(key));
+
+  if (!filteredKeys.length) {
+    return payload || null;
+  }
+
+  const setClauses = filteredKeys.map((key, idx) =>
     JSONB_FIELDS.has(key) ? `${key} = $${idx + 1}::jsonb` : `${key} = $${idx + 1}`
   );
-  const values = keys.map((key) => (JSONB_FIELDS.has(key) ? JSON.stringify(payload[key]) : payload[key]));
+  const values = filteredKeys.map((key) => (JSONB_FIELDS.has(key) ? JSON.stringify(payload[key]) : payload[key]));
 
   const q = `
     UPDATE admin_system_settings
     SET
       ${setClauses.join(', ')},
       updated_at = CURRENT_TIMESTAMP,
-      updated_by = $${keys.length + 1}
+      updated_by = $${filteredKeys.length + 1}
     WHERE id = 1
     RETURNING *
   `;

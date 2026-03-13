@@ -21,6 +21,11 @@ const defaultSettings: AdminSystemSettings = {
   allow_mentor_login: true,
   allow_team_creation: true,
   allow_project_creation: true,
+  mentor_assignment_mode: 'manual_only',
+  mentor_auto_assign_threshold: 75,
+  mentor_default_max_active_projects: 5,
+  mentor_recommendation_top_n: 3,
+  mentor_load_balance_enabled: true,
 
   max_projects_per_student: 1,
   max_projects_per_team: 1,
@@ -229,6 +234,45 @@ export default function AdminSettingsPage() {
               <ToggleField label="Allow Mentor Login" checked={settings.allow_mentor_login} onChange={(value) => setBool('allow_mentor_login', value)} />
               <ToggleField label="Allow Team Creation" checked={settings.allow_team_creation} onChange={(value) => setBool('allow_team_creation', value)} />
               <ToggleField label="Allow Project Creation" checked={settings.allow_project_creation} onChange={(value) => setBool('allow_project_creation', value)} />
+            </div>
+
+            <h2 className="text-lg font-semibold text-slate-900">Mentor Assignment</h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <label className="rounded-xl border border-slate-200 p-4 md:col-span-2">
+                <div className="text-sm font-semibold text-slate-900">Assignment Mode</div>
+                <select
+                  value={settings.mentor_assignment_mode}
+                  onChange={(event) => setText('mentor_assignment_mode', event.target.value)}
+                  className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                >
+                  <option value="manual_only">Manual Only</option>
+                  <option value="recommendation_required">Recommendation Required</option>
+                  <option value="auto_assign">Auto Assign</option>
+                </select>
+              </label>
+              <NumberField
+                label="Auto Assign Threshold"
+                value={settings.mentor_auto_assign_threshold}
+                onChange={(value) => setNumber('mentor_auto_assign_threshold', value)}
+                help="Minimum score out of 100"
+              />
+              <NumberField
+                label="Top Recommendations"
+                value={settings.mentor_recommendation_top_n}
+                onChange={(value) => setNumber('mentor_recommendation_top_n', value)}
+                help="How many mentors to shortlist"
+              />
+              <NumberField
+                label="Default Max Active Projects"
+                value={settings.mentor_default_max_active_projects}
+                onChange={(value) => setNumber('mentor_default_max_active_projects', value)}
+                help="Used when mentor capacity is not set"
+              />
+              <ToggleField
+                label="Load Balance Recommendations"
+                checked={settings.mentor_load_balance_enabled}
+                onChange={(value) => setBool('mentor_load_balance_enabled', value)}
+              />
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

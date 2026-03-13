@@ -14,6 +14,7 @@ export interface Project {
   status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'APPROVED' | 'RESUBMITTED';
 
   mentor_employee_id?: string;
+  mentor_name?: string;
   mentor_feedback?: string;
 
   created_at: string;

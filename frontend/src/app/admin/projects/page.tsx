@@ -5,6 +5,11 @@ import { useSearchParams } from "next/navigation";
 import axios from "@/lib/axios";
 import MentorSelectionModal from "@/components/modals/MentorSelectionModal";
 import {
+  approveRecommendedMentor,
+  getProjectMentorRecommendations,
+  type MentorRecommendation,
+} from "@/services/project.service";
+import {
   getAdminComplianceBoard,
   getProjectStatusHistory,
   type AdminComplianceBoardResponse,
@@ -21,6 +26,8 @@ type PendingProject = {
   tech_stack: string[];
   created_at?: string;
 };
+
+type RecommendationMap = Record<string, MentorRecommendation[]>;
 
 const emptyBoard: AdminComplianceBoardResponse = {
   summary: {
@@ -51,6 +58,8 @@ export default function AdminProjectsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPendingProject, setSelectedPendingProject] = useState<PendingProject | null>(null);
   const [statusHistory, setStatusHistory] = useState<ProjectStatusHistoryItem[]>([]);
+  const [recommendationMap, setRecommendationMap] = useState<RecommendationMap>({});
+  const [approvingProjectId, setApprovingProjectId] = useState<string>("");
 
   const pendingMap = useMemo(
     () => new Map(pendingProjects.map((p) => [String(p.project_id), p])),
@@ -80,9 +89,26 @@ export default function AdminProjectsPage() {
       }
 
       if (pendingRes.status === "fulfilled") {
-        setPendingProjects(pendingRes.value.data.projects || []);
+        const nextPendingProjects = pendingRes.value.data.projects || [];
+        setPendingProjects(nextPendingProjects);
+
+        const recommendationEntries = await Promise.allSettled(
+          nextPendingProjects.map(async (project: PendingProject) => {
+            const response = await getProjectMentorRecommendations(String(project.project_id), { limit: 3 });
+            return [String(project.project_id), response.recommendations || []] as const;
+          })
+        );
+
+        const nextRecommendationMap: RecommendationMap = {};
+        for (const entry of recommendationEntries) {
+          if (entry.status === "fulfilled") {
+            nextRecommendationMap[entry.value[0]] = entry.value[1];
+          }
+        }
+        setRecommendationMap(nextRecommendationMap);
       } else {
         setPendingProjects([]);
+        setRecommendationMap({});
       }
     } catch {
       setError("Failed to load project oversight data");
@@ -108,6 +134,18 @@ export default function AdminProjectsPage() {
 
   const handleMentorAssigned = () => {
     void fetchData({ keepLoading: true });
+  };
+
+  const handleApproveRecommendation = async (projectId: string, mentorEmployeeId: string) => {
+    try {
+      setApprovingProjectId(projectId);
+      await approveRecommendedMentor({ projectId, mentorEmployeeId });
+      await fetchData({ keepLoading: true });
+    } catch {
+      setError("Failed to approve mentor recommendation");
+    } finally {
+      setApprovingProjectId("");
+    }
   };
 
   return (
@@ -178,6 +216,8 @@ export default function AdminProjectsPage() {
             {board.items.map((item) => {
               const pendingProject = pendingMap.get(String(item.project_id));
               const isFocused = focusProjectId && String(item.project_id) === String(focusProjectId);
+              const recommendations = recommendationMap[String(item.project_id)] || [];
+              const topRecommendation = recommendations[0] || null;
 
               return (
                 <div
@@ -212,6 +252,44 @@ export default function AdminProjectsPage() {
                         <span>Team size: {item.team_size}</span>
                         <span>Next deadline: {item.next_pending_deadline ? new Date(item.next_pending_deadline).toLocaleString() : "-"}</span>
                       </div>
+
+                      {pendingProject ? (
+                        <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Top recommendation</p>
+                              {topRecommendation ? (
+                                <>
+                                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                                    #{topRecommendation.rank_position} {topRecommendation.mentor_name || topRecommendation.mentor_employee_id}
+                                  </p>
+                                  <p className="text-xs text-slate-600">
+                                    Score {Number(topRecommendation.score || 0).toFixed(1)}
+                                    {topRecommendation.reason_json?.trackMatch ? ` · ${topRecommendation.reason_json.trackMatch}` : ""}
+                                  </p>
+                                  {topRecommendation.reason_json?.techMatches?.length ? (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      Matching tech: {topRecommendation.reason_json.techMatches.join(", ")}
+                                    </p>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <p className="mt-1 text-sm text-indigo-900">No recommendations available yet.</p>
+                              )}
+                            </div>
+
+                            {topRecommendation ? (
+                              <button
+                                onClick={() => handleApproveRecommendation(String(item.project_id), topRecommendation.mentor_employee_id)}
+                                disabled={approvingProjectId === String(item.project_id)}
+                                className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                              >
+                                {approvingProjectId === String(item.project_id) ? "Approving..." : "Approve Recommendation"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
 
                       {item.latest_status_new ? (
                         <div className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">

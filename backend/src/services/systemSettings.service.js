@@ -12,6 +12,7 @@ import {
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const PROJECT_MODES = ['team_based', 'individual', 'both'];
+const MENTOR_ASSIGNMENT_MODES = ['manual_only', 'recommendation_required', 'auto_assign'];
 
 const toBool = (value, fallback) => {
   if (value === undefined || value === null) return fallback;
@@ -77,6 +78,13 @@ const normalizeSettings = (raw) => {
     allow_mentor_login: toBool(current.allow_mentor_login, true),
     allow_team_creation: toBool(current.allow_team_creation, true),
     allow_project_creation: toBool(current.allow_project_creation, true),
+    mentor_assignment_mode: MENTOR_ASSIGNMENT_MODES.includes(String(current.mentor_assignment_mode || '').toLowerCase())
+      ? String(current.mentor_assignment_mode).toLowerCase()
+      : 'manual_only',
+    mentor_auto_assign_threshold: toNum(current.mentor_auto_assign_threshold, 75, 0, 100),
+    mentor_default_max_active_projects: toInt(current.mentor_default_max_active_projects, 5, 1, 100),
+    mentor_recommendation_top_n: toInt(current.mentor_recommendation_top_n, 3, 1, 20),
+    mentor_load_balance_enabled: toBool(current.mentor_load_balance_enabled, true),
 
     max_projects_per_student: toInt(current.max_projects_per_student, 1, 1),
     max_projects_per_team: toInt(current.max_projects_per_team, 1, 1),
@@ -131,6 +139,10 @@ const normalizeSettings = (raw) => {
 };
 
 const validateSettings = (settings) => {
+  if (!MENTOR_ASSIGNMENT_MODES.includes(settings.mentor_assignment_mode)) {
+    throw new Error('mentor_assignment_mode must be one of manual_only, recommendation_required, auto_assign');
+  }
+
   if (settings.max_team_size < settings.min_team_size) {
     throw new Error('max_team_size must be greater than or equal to min_team_size');
   }

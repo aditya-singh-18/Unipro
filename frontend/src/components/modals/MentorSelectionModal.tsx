@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import axios from "@/lib/axios";
 import { X } from "lucide-react";
+import {
+  approveRecommendedMentor,
+  getProjectMentorRecommendations,
+  type MentorRecommendation,
+} from "@/services/project.service";
+import axios from "@/lib/axios";
 
 interface Mentor {
   employee_id: string;
@@ -12,6 +17,7 @@ interface Mentor {
   designation: string;
   contact_number: string;
   assigned_projects: number;
+  max_active_projects?: number;
 }
 
 interface MentorSelectionModalProps {
@@ -35,10 +41,13 @@ export default function MentorSelectionModal({
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [recommendations, setRecommendations] = useState<MentorRecommendation[]>([]);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      fetchMentors();
+      void fetchMentors();
+      void fetchRecommendations();
       setError("");
       setSuccess("");
       setSelectedMentor(null);
@@ -62,6 +71,23 @@ export default function MentorSelectionModal({
     }
   };
 
+  const fetchRecommendations = async () => {
+    try {
+      setRecommendationLoading(true);
+      const response = await getProjectMentorRecommendations(projectId, { limit: 5 });
+      const nextRecommendations = response.recommendations || [];
+      setRecommendations(nextRecommendations);
+
+      if (nextRecommendations[0]?.mentor_employee_id) {
+        setSelectedMentor((current) => current || nextRecommendations[0].mentor_employee_id);
+      }
+    } catch {
+      setRecommendations([]);
+    } finally {
+      setRecommendationLoading(false);
+    }
+  };
+
   const handleAssignMentor = async () => {
     if (!selectedMentor) {
       setError("Please select a mentor");
@@ -71,11 +97,22 @@ export default function MentorSelectionModal({
     try {
       setAssigning(true);
       setError("");
-      
-      await axios.post("/project/admin/assign-mentor", {
-        projectId,
-        mentorEmployeeId: selectedMentor,
-      });
+
+      const hasRecommendation = recommendations.some(
+        (item) => item.mentor_employee_id === selectedMentor
+      );
+
+      if (hasRecommendation) {
+        await approveRecommendedMentor({
+          projectId,
+          mentorEmployeeId: selectedMentor,
+        });
+      } else {
+        await axios.post("/project/admin/assign-mentor", {
+          projectId,
+          mentorEmployeeId: selectedMentor,
+        });
+      }
 
       setSuccess(`Mentor assigned successfully to "${projectTitle}"`);
       
@@ -98,12 +135,13 @@ export default function MentorSelectionModal({
   if (!isOpen) return null;
 
   const selectedMentorData = mentors.find((m) => m.employee_id === selectedMentor);
+  const recommendedMentorIds = new Set(recommendations.map((item) => item.mentor_employee_id));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         {/* HEADER */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between border-b">
+        <div className="sticky top-0 bg-linear-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between border-b">
           <div>
             <h2 className="text-2xl font-bold text-white">Assign Mentor</h2>
             <p className="text-blue-100 text-sm mt-1">Project: {projectTitle}</p>
@@ -144,6 +182,46 @@ export default function MentorSelectionModal({
             </div>
           ) : (
             <>
+              <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-indigo-900">Recommended Mentors</p>
+                    <p className="text-xs text-indigo-700">Top ranked mentors based on track, tech stack, skill level, and load.</p>
+                  </div>
+                  {recommendationLoading ? <span className="text-xs text-indigo-700">Loading...</span> : null}
+                </div>
+
+                {recommendations.length === 0 ? (
+                  <p className="mt-3 text-sm text-indigo-800">No recommendations generated yet. You can still assign manually.</p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {recommendations.slice(0, 3).map((item) => (
+                      <button
+                        key={item.mentor_employee_id}
+                        type="button"
+                        onClick={() => setSelectedMentor(item.mentor_employee_id)}
+                        className={`flex w-full items-start justify-between rounded-lg border px-3 py-2 text-left transition ${
+                          selectedMentor === item.mentor_employee_id
+                            ? "border-indigo-500 bg-white"
+                            : "border-indigo-200 bg-indigo-100/50 hover:bg-white"
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">#{item.rank_position} {item.mentor_name || item.mentor_employee_id}</p>
+                          <p className="text-xs text-slate-600">{item.reason_json?.trackMatch || "Track/skill based recommendation"}</p>
+                          {item.reason_json?.techMatches?.length ? (
+                            <p className="mt-1 text-xs text-slate-500">Tech: {item.reason_json.techMatches.join(", ")}</p>
+                          ) : null}
+                        </div>
+                        <span className="rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white">
+                          {Number(item.score || 0).toFixed(1)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* MENTORS LIST */}
               <div className="space-y-3 mb-6">
                 {mentors.map((mentor) => (
@@ -174,6 +252,11 @@ export default function MentorSelectionModal({
                           <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-medium text-slate-700">
                             Projects: {mentor.assigned_projects}
                           </span>
+                          {recommendedMentorIds.has(mentor.employee_id) ? (
+                            <span className="px-3 py-1 rounded-full bg-indigo-100 text-xs font-medium text-indigo-700">
+                              Recommended
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <div className="ml-4">
@@ -204,6 +287,9 @@ export default function MentorSelectionModal({
                   <p className="text-sm text-slate-600 mt-1">
                     {selectedMentorData.department} • {selectedMentorData.designation}
                   </p>
+                  {recommendedMentorIds.has(selectedMentorData.employee_id) ? (
+                    <p className="mt-1 text-xs font-medium text-indigo-700">This mentor is in the recommendation shortlist.</p>
+                  ) : null}
                 </div>
               )}
             </>
@@ -224,7 +310,7 @@ export default function MentorSelectionModal({
             disabled={!selectedMentor || assigning || loading}
             className={`px-6 py-2 rounded-lg font-semibold transition text-white ${
               selectedMentor && !assigning && !loading
-                ? "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                ? "bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                 : "bg-slate-400 cursor-not-allowed"
             }`}
           >

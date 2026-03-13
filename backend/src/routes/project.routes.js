@@ -5,6 +5,7 @@ import { allowRoles } from '../middlewares/role.middleware.js';
 import { mentorReviewProject } from '../controllers/project.controller.js';
 import { getPendingProjects } from '../controllers/project.controller.js';
 import { adminAssignMentor } from '../controllers/project.controller.js';
+import { approveRecommendedMentor } from '../controllers/project.controller.js';
 import { getMentorAssignedProjects } from '../controllers/project.controller.js';
 import { getMentorRejectedProjectsHistory } from '../controllers/project.controller.js';
 import { revokeRejectedDecision } from '../controllers/project.controller.js';
@@ -13,6 +14,7 @@ import { activateProject } from '../controllers/project.controller.js';
 import { getMyProjects } from '../controllers/project.controller.js';
 import { getProjectDetail } from '../controllers/project.controller.js';
 import { editProject } from '../controllers/project.controller.js';
+import { getProjectMentorRecommendations } from '../controllers/project.controller.js';
 
 
 
@@ -46,6 +48,18 @@ router.post(
   authenticate,
   allowRoles('ADMIN'),
   adminAssignMentor
+);
+router.get(
+  '/admin/:projectId/mentor-recommendations',
+  authenticate,
+  allowRoles('ADMIN'),
+  getProjectMentorRecommendations
+);
+router.post(
+  '/admin/approve-recommended-mentor',
+  authenticate,
+  allowRoles('ADMIN'),
+  approveRecommendedMentor
 );
 router.get(
   '/mentor/assigned',

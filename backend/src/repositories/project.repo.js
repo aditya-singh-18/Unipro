@@ -1,6 +1,7 @@
 import pool from '../config/db.js';
 
 let supportsGithubRepoUrlColumn = null;
+let mentorProfileColumns = null;
 
 const hasGithubRepoUrlColumn = async () => {
   if (supportsGithubRepoUrlColumn !== null) {
@@ -19,6 +20,22 @@ const hasGithubRepoUrlColumn = async () => {
   const { rows } = await pool.query(q);
   supportsGithubRepoUrlColumn = Boolean(rows[0]?.exists);
   return supportsGithubRepoUrlColumn;
+};
+
+const getMentorProfileColumns = async () => {
+  if (mentorProfileColumns) {
+    return mentorProfileColumns;
+  }
+
+  const q = `
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = 'mentor_profiles'
+  `;
+
+  const { rows } = await pool.query(q);
+  mentorProfileColumns = new Set(rows.map((row) => row.column_name));
+  return mentorProfileColumns;
 };
 
 /* =========================
@@ -93,6 +110,7 @@ export const assignMentorToProject = async ({
   projectId,
   mentorEmployeeId,
 }) => {
+  const mentorColumns = await getMentorProfileColumns();
   const q = `
     UPDATE projects
     SET
@@ -102,6 +120,18 @@ export const assignMentorToProject = async ({
     WHERE project_id = $1
   `;
   await pool.query(q, [projectId, mentorEmployeeId]);
+
+  if (mentorColumns.has('last_assigned_at')) {
+    await pool.query(
+      `
+        UPDATE mentor_profiles
+        SET last_assigned_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE employee_id = $1
+      `,
+      [mentorEmployeeId]
+    );
+  }
 };
 
 /* =========================
@@ -447,15 +477,20 @@ export const getProjectsOfStudent = async (enrollmentId) => {
     SELECT DISTINCT
       p.project_id,
       p.title,
+      p.track,
+      p.tech_stack,
       p.status,
       to_jsonb(p)->>'github_repo_url' AS github_repo_url,
       p.mentor_employee_id,
+      COALESCE(mp.full_name, p.mentor_employee_id) AS mentor_name,
       p.mentor_feedback,
       p.approved_at,
       p.created_at
     FROM projects p
     JOIN team_members tm
       ON tm.team_id = p.project_id
+    LEFT JOIN mentor_profiles mp
+      ON mp.employee_id = p.mentor_employee_id
     WHERE tm.enrollment_id = $1
     ORDER BY p.created_at DESC
   `;
