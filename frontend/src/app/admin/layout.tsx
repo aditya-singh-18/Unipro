@@ -57,12 +57,15 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="h-screen flex bg-slate-50 overflow-hidden">
+    <div className="h-screen bg-slate-50 overflow-hidden">
       {/* SIDEBAR */}
       <AdminSidebar />
 
       {/* CONTENT */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className="h-screen flex flex-col min-w-0"
+        style={{ marginLeft: "var(--admin-sidebar-offset, 64px)" }}
+      >
         <AdminTopbar />
 
         <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto overflow-x-hidden">

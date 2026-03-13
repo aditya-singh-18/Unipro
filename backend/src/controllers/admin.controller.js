@@ -9,8 +9,17 @@ import {
   getUserStatisticsService,
   getAllStudentsService,
   getAllMentorsService,
-  getAllUsersService
+  getAllUsersService,
+  getUserDetailService,
+  updateUserStatusService,
+  updateUserProfileService
 } from '../services/admin.service.js';
+
+const parsePositiveInt = (value, fallback) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return parsed;
+};
 
 
 export const getAdminProfile = async (req, res, next) => {
@@ -173,10 +182,11 @@ export const getUserStatistics = async (req, res, next) => {
 ========================= */
 export const getAllStudents = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = Math.min(parsePositiveInt(req.query.limit, 10), 100);
+    const search = (req.query.search || req.query.q || '').toString();
 
-    const result = await getAllStudentsService(page, limit);
+    const result = await getAllStudentsService(page, limit, search);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -188,10 +198,11 @@ export const getAllStudents = async (req, res, next) => {
 ========================= */
 export const getAllMentors = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = Math.min(parsePositiveInt(req.query.limit, 10), 100);
+    const search = (req.query.search || req.query.q || '').toString();
 
-    const result = await getAllMentorsService(page, limit);
+    const result = await getAllMentorsService(page, limit, search);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -203,11 +214,63 @@ export const getAllMentors = async (req, res, next) => {
 ========================= */
 export const getAllUsers = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = Math.min(parsePositiveInt(req.query.limit, 10), 100);
+    const search = (req.query.search || req.query.q || '').toString();
 
-    const result = await getAllUsersService(page, limit);
+    const result = await getAllUsersService(page, limit, search);
     res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/* =========================
+   USER MANAGEMENT: GET USER DETAIL
+========================= */
+export const getUserDetail = async (req, res, next) => {
+  try {
+    const { userKey } = req.params;
+    const result = await getUserDetailService(userKey);
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/* =========================
+   USER MANAGEMENT: UPDATE USER STATUS
+========================= */
+export const updateUserStatus = async (req, res, next) => {
+  try {
+    const { userKey } = req.params;
+    const { is_active } = req.body;
+
+    const result = await updateUserStatusService({
+      actorUserKey: req.user.user_key,
+      targetUserKey: userKey,
+      isActive: is_active
+    });
+
+    res.json({ success: true, data: result, message: 'User status updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/* =========================
+   USER MANAGEMENT: UPDATE USER PROFILE
+========================= */
+export const updateUserProfile = async (req, res, next) => {
+  try {
+    const { userKey } = req.params;
+    const result = await updateUserProfileService({
+      targetUserKey: userKey,
+      payload: req.body
+    });
+
+    res.json({ success: true, data: result, message: 'User profile updated successfully' });
   } catch (err) {
     next(err);
   }

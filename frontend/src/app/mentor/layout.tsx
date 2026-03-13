@@ -93,10 +93,13 @@ export default function MentorLayout({
 
   // ✅ User is an authorized mentor - render the layout
   return (
-    <div className="h-screen flex bg-slate-100 overflow-hidden">
+    <div className="h-screen bg-slate-100 overflow-hidden">
       <MentorSidebar />
 
-      <div className="flex-1 flex flex-col">
+      <div
+        className="h-screen flex flex-col"
+        style={{ marginLeft: "var(--mentor-sidebar-offset, 72px)" }}
+      >
         <MentorTopbar />
         <main className="p-6 overflow-y-auto">{children}</main>
       </div>

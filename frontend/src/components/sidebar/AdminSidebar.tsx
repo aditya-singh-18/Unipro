@@ -17,6 +17,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/store/auth.store";
 
+type SidebarMode = "stable" | "hover";
+
 const menu = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/admin/dashboard" },
   { label: "User Management", icon: Users, path: "/admin/users" },
@@ -33,8 +35,40 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const { logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [mode, setMode] = useState<SidebarMode>(() => {
+    if (typeof window === "undefined") return "stable";
+
+    const savedMode = localStorage.getItem("admin_sidebar_mode");
+    return savedMode === "hover" ? "hover" : "stable";
+  });
+  const [isHovering, setIsHovering] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+  const STORAGE_KEY = "admin_sidebar_mode";
+
+  const effectiveCollapsed = mode === "hover" ? !isHovering : collapsed;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, mode);
+    } catch {
+      // ignore storage errors
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    const offsetPx =
+      mode === "stable" ? (collapsed ? 64 : 224) : 64;
+
+    document.documentElement.style.setProperty(
+      "--admin-sidebar-offset",
+      `${offsetPx}px`
+    );
+
+    return () => {
+      document.documentElement.style.removeProperty("--admin-sidebar-offset");
+    };
+  }, [mode, collapsed]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -64,10 +98,12 @@ export default function AdminSidebar() {
 
   return (
     <aside
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
       className={`
-        sticky top-0
+        fixed left-0 top-0 z-40
         h-screen
-        ${collapsed ? "w-16" : "w-56"}
+        ${effectiveCollapsed ? "w-16" : "w-56"}
         shrink-0
         bg-linear-to-b from-[#1e3a5f] via-[#243b63] to-[#1a2f4a]
         text-white
@@ -83,7 +119,7 @@ export default function AdminSidebar() {
       {/* Header */}
       <div className="px-6 py-6 border-b border-white/10">
         <div className="flex items-center justify-between">
-          {!collapsed && (
+          {!effectiveCollapsed && (
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 bg-linear-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center font-bold text-lg shadow-lg">
                 U
@@ -97,10 +133,11 @@ export default function AdminSidebar() {
 
           <button
             onClick={() => setCollapsed((v) => !v)}
+            disabled={mode === "hover"}
             className="p-2 rounded-lg hover:bg-white/10 transition-all duration-200 ml-auto"
-            title={collapsed ? "Expand" : "Collapse"}
+            title={mode === "hover" ? "Disabled in hover mode" : effectiveCollapsed ? "Expand" : "Collapse"}
           >
-            {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            {effectiveCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
           </button>
         </div>
       </div>
@@ -134,13 +171,13 @@ export default function AdminSidebar() {
                       : "hover:bg-white/10 hover:translate-x-1"
                   }
                 `}
-                title={collapsed ? item.label : undefined}
+                title={effectiveCollapsed ? item.label : undefined}
               >
                 <item.icon 
                   size={20} 
                   className={`shrink-0 ${active ? 'text-white' : 'text-blue-200'} transition-colors`} 
                 />
-                {!collapsed && (
+                {!effectiveCollapsed && (
                   <span className={`text-sm font-medium truncate ${active ? 'text-white' : 'text-gray-100'}`}>
                     {item.label}
                   </span>
@@ -150,6 +187,22 @@ export default function AdminSidebar() {
           })}
         </div>
       </nav>
+
+      {/* Sidebar mode settings */}
+      <div className="px-3 pb-2">
+        <button
+          onClick={() => setMode((prev) => (prev === "stable" ? "hover" : "stable"))}
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/10 transition-all duration-200 text-blue-100"
+          title={effectiveCollapsed ? "Toggle sidebar mode" : undefined}
+        >
+          <Settings size={18} className="shrink-0" />
+          {!effectiveCollapsed && (
+            <span className="text-xs font-semibold tracking-wide">
+              Sidebar: {mode === "stable" ? "Stable" : "Hover"}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Footer - Logout */}
       <div className="px-3 py-4 border-t border-white/10">
@@ -170,10 +223,10 @@ export default function AdminSidebar() {
             duration-200
             group
           "
-          title={collapsed ? "Logout" : undefined}
+          title={effectiveCollapsed ? "Logout" : undefined}
         >
           <LogOut size={20} className="shrink-0 group-hover:rotate-12 transition-transform" />
-          {!collapsed && (
+          {!effectiveCollapsed && (
             <span className="text-sm font-medium">Logout</span>
           )}
         </button>

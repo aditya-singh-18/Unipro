@@ -11,9 +11,12 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  Settings,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type SidebarMode = "stable" | "hover";
 
 const menu = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/mentor/dashboard" },
@@ -31,14 +34,50 @@ export default function MentorSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mode, setMode] = useState<SidebarMode>(() => {
+    if (typeof window === "undefined") return "stable";
+
+    const savedMode = localStorage.getItem("mentor_sidebar_mode");
+    return savedMode === "hover" ? "hover" : "stable";
+  });
+  const [isHovering, setIsHovering] = useState(false);
+  const STORAGE_KEY = "mentor_sidebar_mode";
+
+  const effectiveCollapsed = mode === "hover" ? !isHovering : collapsed;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, mode);
+    } catch {
+      // ignore
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    const offsetPx =
+      mode === "stable" ? (collapsed ? 72 : 256) : 72;
+
+    document.documentElement.style.setProperty(
+      "--mentor-sidebar-offset",
+      `${offsetPx}px`
+    );
+
+    return () => {
+      document.documentElement.style.removeProperty("--mentor-sidebar-offset");
+    };
+  }, [mode, collapsed]);
 
   return (
     <aside
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
       className={`
         h-screen
-        sticky
+        fixed
+        left-0
         top-0
-        ${collapsed ? "w-18" : "w-64"}
+        z-40
+        ${effectiveCollapsed ? "w-18" : "w-64"}
         min-w-18
         bg-[#2c4c7c]
         text-white
@@ -53,7 +92,7 @@ export default function MentorSidebar() {
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <h1 className="text-sm font-bold flex items-center gap-2 truncate">
             <span className="text-xl">U</span> UNIVERSITY
           </h1>
@@ -61,10 +100,11 @@ export default function MentorSidebar() {
 
         <button
           onClick={() => setCollapsed((v) => !v)}
+          disabled={mode === "hover"}
           className="p-1 rounded-md hover:bg-white/20 transition"
-          title={collapsed ? "Expand" : "Collapse"}
+          title={mode === "hover" ? "Disabled in hover mode" : effectiveCollapsed ? "Expand" : "Collapse"}
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {effectiveCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
       </div>
 
@@ -95,16 +135,29 @@ export default function MentorSidebar() {
                     : "hover:bg-[#1f3b63]/70"
                 }
               `}
-              title={collapsed ? item.label : undefined}
+              title={effectiveCollapsed ? item.label : undefined}
             >
               <item.icon size={18} className="shrink-0" />
-              {!collapsed && (
+              {!effectiveCollapsed && (
                 <span className="text-sm truncate">{item.label}</span>
               )}
             </div>
           );
         })}
       </nav>
+
+      <div className="pt-2 border-t border-white/10">
+        <button
+          onClick={() => setMode((prev) => (prev === "stable" ? "hover" : "stable"))}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1f3b63]/70 transition"
+          title={effectiveCollapsed ? "Toggle sidebar mode" : undefined}
+        >
+          <Settings size={18} className="shrink-0" />
+          {!effectiveCollapsed && (
+            <span className="text-xs font-semibold">Sidebar: {mode === "stable" ? "Stable" : "Hover"}</span>
+          )}
+        </button>
+      </div>
     </aside>
   );
 }

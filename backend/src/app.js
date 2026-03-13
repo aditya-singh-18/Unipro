@@ -17,6 +17,7 @@ import adminOverrideRoutes from './routes/adminOverride.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import mentorRoutes from './routes/mentor.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import adminSettingsRoutes from './routes/adminSettings.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import studentRoutes from './routes/student.routes.js';
 import meetingsRoutes from './routes/meetings.routes.js';
@@ -74,6 +75,7 @@ app.use('/api', adminOverrideRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/mentor', mentorRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api', meetingsRoutes);
@@ -82,7 +84,7 @@ app.use('/api', systemSettingsRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.send('Kya lene aaye ho 😄 sab thik chal raha hai 🚀');
+  res.send('Kya lene aaye ho 😄 sab thik chal raha hai , maaaaa ke ladddleee me🚀');
 });
 
 // ─── Centralized error handler (must be last) ────────────────────────────────

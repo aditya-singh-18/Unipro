@@ -12,7 +12,10 @@ import {
   getUserStatistics,
   getAllStudents,
   getAllMentors,
-  getAllUsers
+  getAllUsers,
+  getUserDetail,
+  updateUserStatus,
+  updateUserProfile
 } from '../controllers/admin.controller.js';
 const router = express.Router();
 
@@ -95,6 +98,27 @@ router.get(
   authenticate,
   allowRoles('ADMIN'),
   getAllUsers
+);
+
+router.get(
+  '/users/:userKey',
+  authenticate,
+  allowRoles('ADMIN'),
+  getUserDetail
+);
+
+router.patch(
+  '/users/:userKey/status',
+  authenticate,
+  allowRoles('ADMIN'),
+  updateUserStatus
+);
+
+router.patch(
+  '/users/:userKey/profile',
+  authenticate,
+  allowRoles('ADMIN'),
+  updateUserProfile
 );
 
 export default router;

@@ -15,6 +15,11 @@ export default function UserRegistrationModal({
   onClose,
   onUserRegistered,
 }: UserRegistrationModalProps) {
+  const USER_KEY_REGEX = /^[A-Za-z0-9_-]{3,40}$/;
+  const NAME_REGEX = /^[A-Za-z .'-]{2,100}$/;
+  const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   const [step, setStep] = useState<"role" | "form">("role");
   const [selectedRole, setSelectedRole] = useState<"STUDENT" | "MENTOR" | "ADMIN" | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,8 +57,32 @@ export default function UserRegistrationModal({
   };
 
   const validateForm = (): boolean => {
-    if (!formData.user_key || !formData.email || !formData.password || !formData.full_name) {
+    const normalizedUserKey = formData.user_key.trim();
+    const normalizedEmail = formData.email.trim().toLowerCase();
+    const normalizedName = formData.full_name.trim();
+    const normalizedDepartment = formData.department.trim();
+    const normalizedDivision = formData.division.trim();
+    const normalizedDesignation = formData.designation.trim();
+    const normalizedRollNo = formData.roll_number.trim();
+    const normalizedContact = formData.contact_number.trim();
+
+    if (!normalizedUserKey || !normalizedEmail || !formData.password || !normalizedName) {
       setError("Please fill all required fields");
+      return false;
+    }
+
+    if (!USER_KEY_REGEX.test(normalizedUserKey)) {
+      setError("User ID format invalid. Use 3-40 chars: letters, numbers, _ or -");
+      return false;
+    }
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      setError("Please enter a valid email address");
+      return false;
+    }
+
+    if (!NAME_REGEX.test(normalizedName)) {
+      setError("Full name should be 2-100 characters and only letters/spaces");
       return false;
     }
 
@@ -62,20 +91,42 @@ export default function UserRegistrationModal({
       return false;
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (
+      formData.password.length < 8 ||
+      !/[a-z]/.test(formData.password) ||
+      !/[A-Z]/.test(formData.password) ||
+      !/[0-9]/.test(formData.password) ||
+      !/[^A-Za-z0-9]/.test(formData.password)
+    ) {
+      setError("Password must be 8+ chars with upper, lower, number and special character");
+      return false;
+    }
+
+    if (!normalizedDepartment) {
+      setError("Department is required");
+      return false;
+    }
+
+    if (normalizedContact && !PHONE_REGEX.test(normalizedContact)) {
+      setError("Contact number must be 10-15 digits");
       return false;
     }
 
     if (selectedRole === "STUDENT") {
-      if (!formData.roll_number || !formData.year || !formData.division) {
+      if (!normalizedRollNo || !formData.year || !normalizedDivision) {
         setError("Please fill all student-specific fields");
+        return false;
+      }
+
+      const year = Number(formData.year);
+      if (!Number.isInteger(year) || year < 1 || year > 6) {
+        setError("Year must be between 1 and 6");
         return false;
       }
     }
 
     if (selectedRole === "MENTOR" || selectedRole === "ADMIN") {
-      if (!formData.department || !formData.designation) {
+      if (!normalizedDesignation) {
         setError("Please fill all required fields");
         return false;
       }
@@ -96,27 +147,28 @@ export default function UserRegistrationModal({
       setError("");
 
       const payload = {
-        user_key: formData.user_key,
+        user_key: formData.user_key.trim(),
         role: selectedRole,
-        email: formData.email,
+        email: formData.email.trim().toLowerCase(),
         password: formData.password,
         profile: {
-          full_name: formData.full_name,
+          full_name: formData.full_name.trim(),
           ...(selectedRole === "STUDENT" && {
-            department: formData.department,
+            department: formData.department.trim(),
             year: formData.year,
-            division: formData.division,
-            roll_number: formData.roll_number,
+            division: formData.division.trim(),
+            roll_number: formData.roll_number.trim(),
+            contact_number: formData.contact_number.trim() || undefined,
           }),
           ...(selectedRole === "MENTOR" && {
-            department: formData.department,
-            designation: formData.designation,
-            contact_number: formData.contact_number,
+            department: formData.department.trim(),
+            designation: formData.designation.trim(),
+            contact_number: formData.contact_number.trim() || undefined,
           }),
           ...(selectedRole === "ADMIN" && {
-            department: formData.department,
-            designation: formData.designation,
-            contact_number: formData.contact_number,
+            department: formData.department.trim(),
+            designation: formData.designation.trim(),
+            contact_number: formData.contact_number.trim() || undefined,
           }),
         },
       };
@@ -173,7 +225,7 @@ export default function UserRegistrationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         {/* HEADER */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between border-b">
+        <div className="sticky top-0 bg-linear-to-r from-blue-600 to-blue-700 px-8 py-6 flex items-center justify-between border-b">
           <div>
             <h2 className="text-2xl font-bold text-white">Register New User</h2>
             <p className="text-blue-100 text-sm mt-1">Add a new student, mentor, or admin to the system</p>
@@ -259,10 +311,13 @@ export default function UserRegistrationModal({
                   onChange={handleInputChange}
                   placeholder={selectedRole === "STUDENT" ? "ENR2024001" : "EMP2024001"}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                  minLength={3}
+                  maxLength={40}
+                  pattern="[A-Za-z0-9_-]{3,40}"
                   required
                 />
                 <p className="text-xs text-slate-500">
-                  {selectedRole === "STUDENT" ? "Enrollment ID" : "Employee ID"} - Generated automatically
+                  {selectedRole === "STUDENT" ? "Enrollment ID" : "Employee ID"} - unique value only
                 </p>
               </div>
 
@@ -278,6 +333,7 @@ export default function UserRegistrationModal({
                   onChange={handleInputChange}
                   placeholder="user@university.edu"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  maxLength={120}
                   required
                 />
               </div>
@@ -295,6 +351,7 @@ export default function UserRegistrationModal({
                     onChange={handleInputChange}
                     placeholder="••••••••"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    minLength={8}
                     required
                   />
                 </div>
@@ -310,6 +367,7 @@ export default function UserRegistrationModal({
                     onChange={handleInputChange}
                     placeholder="••••••••"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                    minLength={8}
                     required
                   />
                 </div>
@@ -327,6 +385,7 @@ export default function UserRegistrationModal({
                   onChange={handleInputChange}
                   placeholder="John Doe"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  maxLength={100}
                   required
                 />
               </div>
@@ -346,6 +405,7 @@ export default function UserRegistrationModal({
                         onChange={handleInputChange}
                         placeholder="2024001"
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                        maxLength={40}
                         required
                       />
                     </div>
@@ -380,6 +440,7 @@ export default function UserRegistrationModal({
                         onChange={handleInputChange}
                         placeholder="A / B / C"
                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                        maxLength={10}
                         required
                       />
                     </div>
@@ -475,6 +536,8 @@ export default function UserRegistrationModal({
                       onChange={handleInputChange}
                       placeholder="9876543210"
                       className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      pattern="\+?[0-9]{10,15}"
+                      maxLength={15}
                     />
                   </div>
                 </>
@@ -495,7 +558,7 @@ export default function UserRegistrationModal({
                   className={`px-6 py-2 rounded-lg font-semibold transition text-white ${
                     loading
                       ? "bg-slate-400 cursor-not-allowed"
-                      : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                      : "bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                   }`}
                 >
                   {loading ? "Registering..." : "Register User"}
