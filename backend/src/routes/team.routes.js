@@ -6,6 +6,7 @@ import {
   removeTeamMember,
   cancelPendingInvitation,
   disbandTeam, 
+  changeTeamLeader,
 } from '../controllers/team.controller.js';
 
 import { authenticate } from '../middlewares/auth.middleware.js';
@@ -81,6 +82,13 @@ router.post(
   authenticate,
   allowRoles('STUDENT'),
   disbandTeam
+);
+
+router.post(
+  '/change-leader',
+  authenticate,
+  allowRoles('STUDENT'),
+  changeTeamLeader
 );
 
 

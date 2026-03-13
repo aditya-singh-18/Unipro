@@ -8,6 +8,10 @@ import {
   getAllTeamsOfStudent,
   getTeamMembers,
   deleteTeam,
+  countTeamMemberChanges,
+  logTeamMemberChange,
+  updateTeamLeaderEnrollment,
+  updateTeamMemberLeaderFlag,
 } from '../repositories/team.repo.js';
 import {
   findTeamById,
@@ -15,10 +19,44 @@ import {
 } from '../repositories/team.repo.js';
 
 import { isTeamLeader, isMemberExists, removeTeamMember, deleteTeamMembers, deleteTeamInvitations } from '../repositories/team.repo.js';
-import { projectExists } from '../repositories/project.repo.js';
+import { findProjectById } from '../repositories/project.repo.js';
 import { cancelPendingInvite, getInvitationById } from '../repositories/invitation.repo.js';
 import { findUserByIdentifier, findUserByEnrollmentId } from '../repositories/user.repo.js';
 import { pushNotification } from './notification.service.js';
+import { getAdminSystemSettingsService, getPublicSystemAccessService } from './systemSettings.service.js';
+
+const isTeamMembershipLocked = async (teamId, settings) => {
+  const project = await findProjectById(teamId);
+  if (!project) {
+    return false;
+  }
+
+  const status = String(project.status || '').toUpperCase();
+
+  if (settings.auto_lock_team_after_project_approval && ['APPROVED', 'ACTIVE'].includes(status)) {
+    return true;
+  }
+
+  const lockAfterWeek = Number(settings.lock_team_after_week || 0);
+  if (lockAfterWeek > 0) {
+    const progress = await pool.query(
+      `
+      SELECT COALESCE(MAX(week_number), 0)::int AS max_progressed_week
+      FROM project_weeks
+      WHERE project_id = $1
+        AND status <> 'pending'
+      `,
+      [teamId]
+    );
+
+    const maxProgressedWeek = Number(progress.rows[0]?.max_progressed_week || 0);
+    if (maxProgressedWeek >= lockAfterWeek) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 /* =========================
    CREATE TEAM SERVICE
@@ -29,6 +67,13 @@ export const createTeamService = async ({
   teamName,
   leaderEnrollmentId,
 }) => {
+  const access = await getPublicSystemAccessService();
+  const systemSettings = await getAdminSystemSettingsService();
+
+  if (!access.allow_team_creation) {
+    throw new Error('Team creation is currently disabled by admin');
+  }
+
   if (!department || !maxTeamSize || !teamName) {
     throw new Error('Department, teamName and maxTeamSize are required');
   }
@@ -41,10 +86,26 @@ export const createTeamService = async ({
     throw new Error('Team name must be at most 80 characters');
   }
 
-  // 🔒 HARD RULE: max 3 teams per student (created + joined)
+  const requestedTeamSize = Number(maxTeamSize);
+  if (!Number.isInteger(requestedTeamSize) || requestedTeamSize < 1) {
+    throw new Error('maxTeamSize must be a positive integer');
+  }
+
+  if (!systemSettings.allow_solo_projects && requestedTeamSize < 2) {
+    throw new Error('Solo projects are disabled. Team size must be at least 2.');
+  }
+
+  if (requestedTeamSize < Number(systemSettings.min_team_size)) {
+    throw new Error(`Team size cannot be less than ${systemSettings.min_team_size}`);
+  }
+
+  if (requestedTeamSize > Number(systemSettings.max_team_size)) {
+    throw new Error(`Team size cannot exceed ${systemSettings.max_team_size}`);
+  }
+
   const totalTeams = await countTeamsOfStudent(leaderEnrollmentId);
-  if (totalTeams >= 3) {
-    throw new Error('You can be part of maximum 3 teams');
+  if (totalTeams >= Number(systemSettings.max_teams_per_student)) {
+    throw new Error(`You can be part of maximum ${systemSettings.max_teams_per_student} teams`);
   }
 
   // 🔑 Generate team_id (department based sequence)
@@ -55,7 +116,7 @@ export const createTeamService = async ({
     teamId,
     department,
     leaderEnrollmentId,
-    maxTeamSize,
+    requestedTeamSize,
     normalizedTeamName
   );
 
@@ -77,7 +138,7 @@ export const createTeamService = async ({
     team_id: teamId,
     team_name: normalizedTeamName,
     department,
-    max_team_size: maxTeamSize,
+    max_team_size: requestedTeamSize,
   };
 };
 
@@ -102,6 +163,8 @@ export const getMyTeamsService = async (enrollmentId) => {
       department: team.department,
       max_team_size: team.max_team_size,
       leader_enrollment_id: team.leader_enrollment_id,
+      is_leader: team.leader_enrollment_id === enrollmentId,
+      has_project: Boolean(team.project_title),
       project_title: team.project_title,
       created_at: team.created_at,
       members,
@@ -156,6 +219,11 @@ export const removeTeamMemberService = async ({
   memberEnrollmentId,
   requesterEnrollmentId,
 }) => {
+  const systemSettings = await getAdminSystemSettingsService();
+  if (!systemSettings.allow_member_removal) {
+    throw new Error('Member removal is currently disabled by admin');
+  }
+
   if (!teamId || !memberEnrollmentId) {
     throw new Error('teamId and memberEnrollmentId are required');
   }
@@ -166,10 +234,10 @@ export const removeTeamMemberService = async ({
     throw new Error('Team not found');
   }
 
-  // 🔒 Project lock
-  const projectLocked = await projectExists(teamId);
-  if (projectLocked) {
-    throw new Error('Team is locked after project submission');
+  // 🔒 Team lock policy
+  const teamLocked = await isTeamMembershipLocked(teamId, systemSettings);
+  if (teamLocked) {
+    throw new Error('Team is locked by current admin policy');
   }
 
   // 🔒 Only leader
@@ -189,11 +257,24 @@ export const removeTeamMemberService = async ({
     throw new Error('Member not found in team');
   }
 
+  const maxMemberChanges = Number(systemSettings.max_member_change_allowed || 0);
+  const usedMemberChanges = await countTeamMemberChanges(teamId);
+  if (usedMemberChanges >= maxMemberChanges) {
+    throw new Error(`Maximum member changes reached (${maxMemberChanges})`);
+  }
+
   // 🧹 Remove member
   const removed = await removeTeamMember(teamId, memberEnrollmentId);
   if (!removed) {
     throw new Error('Failed to remove member');
   }
+
+  await logTeamMemberChange({
+    teamId,
+    enrollmentId: memberEnrollmentId,
+    action: 'REMOVE',
+    actedBy: requesterEnrollmentId,
+  });
 
   // 🔔 Notify removed member
   const removedUser = await findUserByEnrollmentId(memberEnrollmentId);
@@ -223,6 +304,8 @@ export const cancelPendingInvitationService = async ({
     throw new Error('inviteId is required');
   }
 
+  const systemSettings = await getAdminSystemSettingsService();
+
   // 🔍 Invite exists
   const invite = await getInvitationById(inviteId);
   if (!invite) {
@@ -235,10 +318,10 @@ export const cancelPendingInvitationService = async ({
     throw new Error('Team not found');
   }
 
-  // 🔒 Project lock
-  const projectLocked = await projectExists(invite.team_id);
-  if (projectLocked) {
-    throw new Error('Team is locked after project submission');
+  // 🔒 Team lock policy
+  const teamLocked = await isTeamMembershipLocked(invite.team_id, systemSettings);
+  if (teamLocked) {
+    throw new Error('Team is locked by current admin policy');
   }
 
   // 🔒 Only leader
@@ -277,6 +360,11 @@ export const leaveTeamService = async ({
   teamId,
   requesterEnrollmentId,
 }) => {
+  const systemSettings = await getAdminSystemSettingsService();
+  if (!systemSettings.allow_member_removal) {
+    throw new Error('Leaving team is currently disabled by admin');
+  }
+
   if (!teamId) {
     throw new Error('teamId is required');
   }
@@ -287,10 +375,10 @@ export const leaveTeamService = async ({
     throw new Error('Team not found');
   }
 
-  // 🔒 Project lock
-  const locked = await projectExists(teamId);
-  if (locked) {
-    throw new Error('Cannot leave team after project submission');
+  // 🔒 Team lock policy
+  const teamLocked = await isTeamMembershipLocked(teamId, systemSettings);
+  if (teamLocked) {
+    throw new Error('Cannot leave team because it is locked by current admin policy');
   }
 
   // 🔒 Member check
@@ -305,6 +393,12 @@ export const leaveTeamService = async ({
     throw new Error('Leader cannot leave the team. Disband instead.');
   }
 
+  const maxMemberChanges = Number(systemSettings.max_member_change_allowed || 0);
+  const usedMemberChanges = await countTeamMemberChanges(teamId);
+  if (usedMemberChanges >= maxMemberChanges) {
+    throw new Error(`Maximum member changes reached (${maxMemberChanges})`);
+  }
+
   // 🧹 Remove member
   const removed = await removeTeamMember(
     teamId,
@@ -314,6 +408,13 @@ export const leaveTeamService = async ({
   if (!removed) {
     throw new Error('Failed to leave team');
   }
+
+  await logTeamMemberChange({
+    teamId,
+    enrollmentId: requesterEnrollmentId,
+    action: 'REMOVE',
+    actedBy: requesterEnrollmentId,
+  });
 
   // 🔔 Notify team leader
   const leaderUser = await findUserByEnrollmentId(team.leader_enrollment_id);
@@ -345,6 +446,8 @@ export const disbandTeamService = async ({
     throw new Error('teamId is required');
   }
 
+  const systemSettings = await getAdminSystemSettingsService();
+
   // 🔍 Team exists
   const team = await findTeamById(teamId);
   if (!team) {
@@ -357,10 +460,10 @@ export const disbandTeamService = async ({
     throw new Error('Only team leader can disband the team');
   }
 
-  // 🔒 Project lock
-  const locked = await projectExists(teamId);
-  if (locked) {
-    throw new Error('Team cannot be disbanded after project submission');
+  // 🔒 Team lock policy
+  const teamLocked = await isTeamMembershipLocked(teamId, systemSettings);
+  if (teamLocked) {
+    throw new Error('Team cannot be disbanded because it is locked by current admin policy');
   }
 
   // 🧨 TRANSACTION (SAFE)
@@ -381,4 +484,87 @@ export const disbandTeamService = async ({
     await pool.query('ROLLBACK');
     throw err;
   }
+};
+
+export const changeTeamLeaderService = async ({
+  teamId,
+  newLeaderEnrollmentId,
+  requesterEnrollmentId,
+}) => {
+  const systemSettings = await getAdminSystemSettingsService();
+
+  if (!systemSettings.team_leader_required) {
+    throw new Error('Team leader requirement is disabled by admin; leader change is not applicable');
+  }
+
+  if (!systemSettings.allow_leader_change) {
+    throw new Error('Leader change is currently disabled by admin');
+  }
+
+  if (!teamId || !newLeaderEnrollmentId) {
+    throw new Error('teamId and newLeaderEnrollmentId are required');
+  }
+
+  const team = await findTeamById(teamId);
+  if (!team) {
+    throw new Error('Team not found');
+  }
+
+  const teamLocked = await isTeamMembershipLocked(teamId, systemSettings);
+  if (teamLocked) {
+    throw new Error('Team is locked by current admin policy');
+  }
+
+  const isCurrentLeader = await isTeamLeader(teamId, requesterEnrollmentId);
+  if (!isCurrentLeader) {
+    throw new Error('Only current team leader can transfer leadership');
+  }
+
+  if (newLeaderEnrollmentId === requesterEnrollmentId) {
+    throw new Error('New leader must be different from current leader');
+  }
+
+  const newLeaderExists = await isMemberExists(teamId, newLeaderEnrollmentId);
+  if (!newLeaderExists) {
+    throw new Error('New leader must be an existing team member');
+  }
+
+  await pool.query('BEGIN');
+
+  try {
+    await updateTeamMemberLeaderFlag(teamId, requesterEnrollmentId, false);
+    await updateTeamMemberLeaderFlag(teamId, newLeaderEnrollmentId, true);
+    await updateTeamLeaderEnrollment(teamId, newLeaderEnrollmentId);
+
+    await pool.query('COMMIT');
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    throw error;
+  }
+
+  const oldLeaderUser = await findUserByEnrollmentId(requesterEnrollmentId);
+  if (oldLeaderUser?.user_key) {
+    await pushNotification({
+      userKey: oldLeaderUser.user_key,
+      role: 'student',
+      title: 'Leadership Transferred',
+      message: `You transferred leadership of team ${teamId} to ${newLeaderEnrollmentId}.`,
+    });
+  }
+
+  const newLeaderUser = await findUserByEnrollmentId(newLeaderEnrollmentId);
+  if (newLeaderUser?.user_key) {
+    await pushNotification({
+      userKey: newLeaderUser.user_key,
+      role: 'student',
+      title: 'You Are Team Leader Now',
+      message: `You are now the leader of team ${teamId}.`,
+    });
+  }
+
+  return {
+    team_id: teamId,
+    previous_leader: requesterEnrollmentId,
+    new_leader: newLeaderEnrollmentId,
+  };
 };

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import Sidebar from "@/components/sidebar/StudentSidebar";
 import Topbar from "@/components/dashboard/Topbar";
 
 import { createTeam } from "@/services/team/team.service";
+import { getPublicSystemAccess } from "@/services/systemSettings.service";
 
 const DEPARTMENTS = ["CSE", "ECE", "ME", "IT", "CIVIL"];
 
@@ -16,14 +17,46 @@ export default function CreateTeamPage() {
   const [department, setDepartment] = useState("");
   const [teamName, setTeamName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [teamCreationAllowed, setTeamCreationAllowed] = useState(true);
+  const [minTeamSize, setMinTeamSize] = useState(2);
+  const [maxTeamSize, setMaxTeamSize] = useState(4);
+  const [teamSize, setTeamSize] = useState(4);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const access = await getPublicSystemAccess();
+        setTeamCreationAllowed(Boolean(access.allow_team_creation));
+        const minSize = Math.max(1, Number(access.min_team_size || 2));
+        const maxSize = Math.max(minSize, Number(access.max_team_size || 4));
+        setMinTeamSize(minSize);
+        setMaxTeamSize(maxSize);
+        setTeamSize((current) => {
+          if (current < minSize) return minSize;
+          if (current > maxSize) return maxSize;
+          return current;
+        });
+      } catch {
+        setTeamCreationAllowed(true);
+        setMinTeamSize(2);
+        setMaxTeamSize(4);
+        setTeamSize(4);
+      }
+    })();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!department) {
       setError("Please select a department");
+      return;
+    }
+
+    if (!teamCreationAllowed) {
+      setError("Team creation is currently disabled by admin");
       return;
     }
 
@@ -37,7 +70,7 @@ export default function CreateTeamPage() {
     setError("");
 
     try {
-      const res = await createTeam(department, 4, teamName.trim());
+      const res = await createTeam(department, teamSize, teamName.trim());
       setSuccess(`Team created successfully! ID: ${res.team.team_id}`);
 
       setTimeout(() => {
@@ -82,6 +115,12 @@ export default function CreateTeamPage() {
                 </h2>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
+                  {!teamCreationAllowed && (
+                    <p className="text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Team creation is currently disabled by admin settings.
+                    </p>
+                  )}
+
                   <div className="field-hover">
                     <label className="text-sm font-medium text-slate-700">
                       Team Name
@@ -92,6 +131,7 @@ export default function CreateTeamPage() {
                       onChange={(e) => setTeamName(e.target.value)}
                       maxLength={80}
                       placeholder="Enter your team name"
+                      disabled={!teamCreationAllowed}
                       className="mt-1 w-full p-3 rounded-xl border border-blue-300 bg-white/70 focus:outline-none"
                     />
                   </div>
@@ -103,6 +143,7 @@ export default function CreateTeamPage() {
                     <select
                       value={department}
                       onChange={(e) => setDepartment(e.target.value)}
+                      disabled={!teamCreationAllowed}
                       className="mt-1 w-full p-3 rounded-xl border border-blue-300 bg-white/70 focus:outline-none"
                     >
                       <option value="">-- Select Department --</option>
@@ -118,20 +159,29 @@ export default function CreateTeamPage() {
                     <label className="text-sm font-medium text-slate-700">
                       Max Team Size
                     </label>
-                    <input
-                      type="text"
-                      value="4"
-                      disabled
-                      className="mt-1 w-full p-3 rounded-xl border border-blue-300 bg-white/40 text-slate-600 cursor-not-allowed"
-                    />
+                    <select
+                      value={teamSize}
+                      onChange={(e) => setTeamSize(Number(e.target.value))}
+                      disabled={!teamCreationAllowed}
+                      className="mt-1 w-full p-3 rounded-xl border border-blue-300 bg-white/70 focus:outline-none"
+                    >
+                      {Array.from(
+                        { length: maxTeamSize - minTeamSize + 1 },
+                        (_, index) => minTeamSize + index
+                      ).map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
                     <p className="text-xs text-slate-500 mt-1">
-                      Team size is fixed by the system
+                      Allowed by admin policy: {minTeamSize} to {maxTeamSize}
                     </p>
                   </div>
 
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || !teamCreationAllowed}
                     className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-300 category-hover disabled:opacity-60"
                   >
                     {loading ? "Creating..." : "Create Team"}

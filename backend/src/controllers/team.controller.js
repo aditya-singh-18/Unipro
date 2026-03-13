@@ -7,6 +7,7 @@ import { removeTeamMemberService } from '../services/team.service.js';
 import { cancelPendingInvitationService } from '../services/team.service.js';
 import { leaveTeamService } from '../services/team.service.js';
 import { disbandTeamService } from '../services/team.service.js';
+import { changeTeamLeaderService } from '../services/team.service.js';
 
 /* =========================
    CREATE TEAM
@@ -185,6 +186,30 @@ export const disbandTeam = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Team disbanded successfully',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const changeTeamLeader = async (req, res) => {
+  try {
+    const { teamId, newLeaderEnrollmentId } = req.body;
+    const requesterEnrollmentId = req.user.user_key;
+
+    const result = await changeTeamLeaderService({
+      teamId,
+      newLeaderEnrollmentId,
+      requesterEnrollmentId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Team leader changed successfully',
       data: result,
     });
   } catch (error) {

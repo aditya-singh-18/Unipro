@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isAxiosError } from "axios";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { loginUser } from "../../../services/auth.service";
 import { useAuth } from "../../../store/auth.store";
+import { getPublicSystemAccess, type PublicSystemAccess } from "@/services/systemSettings.service";
 
 type UiRole = "Student" | "Mentor" | "Faculty" | "Admin" | null;
 type ApiRole = "STUDENT" | "MENTOR" | "ADMIN" | null;
@@ -28,6 +29,23 @@ export default function LoginPage() {
   const [apiRole, setApiRole] = useState<ApiRole>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [access, setAccess] = useState<PublicSystemAccess>({
+    allow_student_login: true,
+    allow_mentor_login: true,
+    allow_team_creation: true,
+    allow_project_creation: true,
+    enable_weekly_submissions: true,
+  });
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setAccess(await getPublicSystemAccess());
+      } catch {
+        // Keep permissive fallback if access endpoint is unavailable.
+      }
+    })();
+  }, []);
 
   const handleLogin = async () => {
     setError("");
@@ -156,6 +174,7 @@ export default function LoginPage() {
             icon={<GraduationCap />}
             label="Student"
             selected={uiRole === "Student"}
+            disabled={!access.allow_student_login}
             onClick={() => {
               setUiRole("Student");
               setApiRole("STUDENT");
@@ -166,6 +185,7 @@ export default function LoginPage() {
             icon={<Lightbulb />}
             label="Mentor"
             selected={uiRole === "Mentor"}
+            disabled={!access.allow_mentor_login}
             onClick={() => {
               setUiRole("Mentor");
               setApiRole("MENTOR");
@@ -176,6 +196,7 @@ export default function LoginPage() {
             icon={<Briefcase />}
             label="Faculty"
             selected={uiRole === "Faculty"}
+            disabled={!access.allow_mentor_login}
             onClick={() => {
               setUiRole("Faculty");
               setApiRole("MENTOR"); // Faculty backend me Mentor hi hoga
@@ -201,14 +222,20 @@ type RoleProps = {
   icon: React.ReactNode;
   label: string;
   selected: boolean;
+  disabled?: boolean;
   onClick: () => void;
 };
 
-function Role({ icon, label, selected, onClick }: RoleProps) {
+function Role({ icon, label, selected, disabled = false, onClick }: RoleProps) {
   return (
     <div
-      onClick={onClick}
+      onClick={() => {
+        if (!disabled) onClick();
+      }}
       className={`cursor-pointer rounded-xl p-3 border transition ${
+        disabled
+          ? "border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed"
+          :
         selected
           ? "border-[#2c3e73] bg-[#eef2ff] shadow-md"
           : "border-gray-200 bg-white hover:shadow"

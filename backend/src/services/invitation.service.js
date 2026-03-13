@@ -14,9 +14,46 @@ import {
   countTeamMembers,
   isMemberExists,
   addTeamMember,
+  countTeamMemberChanges,
+  logTeamMemberChange,
 } from '../repositories/team.repo.js';
+import { findProjectById } from '../repositories/project.repo.js';
 import { findUserByIdentifier, findUserByEnrollmentId } from '../repositories/user.repo.js';
 import { pushNotification } from './notification.service.js';
+import { getAdminSystemSettingsService } from './systemSettings.service.js';
+
+const isTeamMembershipLocked = async (teamId, settings) => {
+  const project = await findProjectById(teamId);
+  if (!project) {
+    return false;
+  }
+
+  const status = String(project.status || '').toUpperCase();
+
+  if (settings.auto_lock_team_after_project_approval && ['APPROVED', 'ACTIVE'].includes(status)) {
+    return true;
+  }
+
+  const lockAfterWeek = Number(settings.lock_team_after_week || 0);
+  if (lockAfterWeek > 0) {
+    const progress = await pool.query(
+      `
+      SELECT COALESCE(MAX(week_number), 0)::int AS max_progressed_week
+      FROM project_weeks
+      WHERE project_id = $1
+        AND status <> 'pending'
+      `,
+      [teamId]
+    );
+
+    const maxProgressedWeek = Number(progress.rows[0]?.max_progressed_week || 0);
+    if (maxProgressedWeek >= lockAfterWeek) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 /**
  * SEND INVITE
@@ -26,6 +63,11 @@ export const sendInviteService = async ({
   invitedEnrollmentId,
   requesterEnrollmentId,
 }) => {
+  const systemSettings = await getAdminSystemSettingsService();
+  if (!systemSettings.allow_member_add_after_creation) {
+    throw new Error('Adding new team members is currently disabled by admin');
+  }
+
   if (!teamId || !invitedEnrollmentId) {
     throw new Error('teamId and invitedEnrollmentId are required');
   }
@@ -33,6 +75,11 @@ export const sendInviteService = async ({
   const team = await findTeamById(teamId);
   if (!team) {
     throw new Error('Team not found');
+  }
+
+  const teamLocked = await isTeamMembershipLocked(teamId, systemSettings);
+  if (teamLocked) {
+    throw new Error('Team member updates are locked by current admin policy');
   }
 
   // 🔒 Only leader can invite
@@ -110,6 +157,8 @@ export const respondToInviteService = async ({
   action,
   responderEnrollmentId,
 }) => {
+  const systemSettings = await getAdminSystemSettingsService();
+
   if (!inviteId || !action) {
     throw new Error('inviteId and action are required');
   }
@@ -151,6 +200,15 @@ export const respondToInviteService = async ({
   // ✅ Accept flow (TRANSACTION SAFE)
   // ✅ Accept flow (UPDATED: max 3 teams allowed)
 if (action === 'ACCEPT') {
+  if (!systemSettings.allow_member_add_after_creation) {
+    throw new Error('Adding new team members is currently disabled by admin');
+  }
+
+  const teamLocked = await isTeamMembershipLocked(invite.team_id, systemSettings);
+  if (teamLocked) {
+    throw new Error('Team member updates are locked by current admin policy');
+  }
+
   await pool.query('BEGIN');
 
   try {
@@ -166,11 +224,18 @@ if (action === 'ACCEPT') {
 
     const teamCount = teamCountResult.rows[0].team_count;
 
-    // ❌ Max 3 teams allowed (solo handled separately in project module)
-    if (teamCount >= 3) {
+    const maxTeamsPerStudent = Number(systemSettings.max_teams_per_student);
+    const maxMemberChanges = Number(systemSettings.max_member_change_allowed || 0);
+    const usedMemberChanges = await countTeamMemberChanges(invite.team_id);
+
+    if (teamCount >= maxTeamsPerStudent) {
       throw new Error(
-        'You have already joined maximum allowed teams (3)'
+        `You have already joined maximum allowed teams (${maxTeamsPerStudent})`
       );
+    }
+
+    if (usedMemberChanges >= maxMemberChanges) {
+      throw new Error(`Maximum member changes reached (${maxMemberChanges})`);
     }
 
     // 🔢 Check team capacity
@@ -188,6 +253,13 @@ if (action === 'ACCEPT') {
 
     // ➕ Add member
     await addTeamMember(invite.team_id, responderEnrollmentId, false);
+
+    await logTeamMemberChange({
+      teamId: invite.team_id,
+      enrollmentId: responderEnrollmentId,
+      action: 'ADD',
+      actedBy: responderEnrollmentId,
+    });
 
     // ✅ Update invitation status
     await updateInvitationStatus(inviteId, 'ACCEPTED');
@@ -210,7 +282,7 @@ if (action === 'ACCEPT') {
       status: 'ACCEPTED',
       team_id: invite.team_id,
       current_team_count: teamCount + 1,
-      max_allowed_teams: 3,
+      max_allowed_teams: maxTeamsPerStudent,
     };
   } catch (err) {
     await pool.query('ROLLBACK');

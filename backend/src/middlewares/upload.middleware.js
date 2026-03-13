@@ -26,6 +26,8 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/gif',
   'image/webp',
   'text/plain',
+  'application/zip',
+  'application/x-zip-compressed',
 ]);
 
 const storage = multer.diskStorage({
@@ -47,5 +49,5 @@ const fileFilter = (_req, file, cb) => {
 export const uploadSingle = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  limits: { fileSize: 100 * 1024 * 1024 }, // Upper cap; exact tenant limit is enforced in tracker service
 }).single('file');

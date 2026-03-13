@@ -8,6 +8,7 @@ import Topbar from '@/components/dashboard/Topbar'
 import UiverseButton from '@/components/ui/uiverse-button'
 
 import { getMyProjects } from '@/services/project.service'
+import { getPublicSystemAccess } from '@/services/systemSettings.service'
 import { Project } from '@/types/project'
 
 export default function MyProjectPage() {
@@ -15,13 +16,18 @@ export default function MyProjectPage() {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [projectCreationAllowed, setProjectCreationAllowed] = useState(true)
 
   /* ================= FETCH PROJECTS ================= */
   useEffect(() => {
     const fetch = async () => {
       try {
-        const res = await getMyProjects()
+        const [res, access] = await Promise.all([
+          getMyProjects(),
+          getPublicSystemAccess(),
+        ])
         setProjects(res.projects ?? [])
+        setProjectCreationAllowed(Boolean(access.allow_project_creation))
       } finally {
         setLoading(false)
       }
@@ -49,6 +55,7 @@ export default function MyProjectPage() {
 
             <UiverseButton
               variant="create"
+              disabled={!projectCreationAllowed}
               onClick={() =>
                 router.push('/student/my-project/create')
               }
@@ -56,6 +63,12 @@ export default function MyProjectPage() {
               + Create Project
             </UiverseButton>
           </div>
+
+          {!projectCreationAllowed && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Project creation is currently disabled by admin settings.
+            </div>
+          )}
 
           {/* ================= LOADING ================= */}
           {loading && (

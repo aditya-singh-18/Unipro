@@ -21,6 +21,7 @@ import profileRoutes from './routes/profile.routes.js';
 import studentRoutes from './routes/student.routes.js';
 import meetingsRoutes from './routes/meetings.routes.js';
 import trackerRoutes from './routes/tracker.routes.js';
+import systemSettingsRoutes from './routes/systemSettings.routes.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 import { generalLimiter } from './middlewares/rateLimit.middleware.js';
 
@@ -77,6 +78,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api', meetingsRoutes);
 app.use('/api/tracker', trackerRoutes);
+app.use('/api', systemSettingsRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {

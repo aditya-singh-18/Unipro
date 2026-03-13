@@ -17,6 +17,7 @@ import {
   getMyTeams,
   getTeamById,
   removeTeamMember,
+  changeTeamLeader,
 } from "@/services/team/team.service";
 import {
   getMyInvitations,
@@ -35,6 +36,7 @@ import {
   getStudentMeetings,
   type Meeting,
 } from "@/services/meeting.service";
+import { getPublicSystemAccess } from "@/services/systemSettings.service";
 
 type TeamMember = {
   enrollment_id: string;
@@ -125,6 +127,13 @@ export default function TeamDashboard() {
   const [teamDetailLoading, setTeamDetailLoading] = useState(false);
   const [confirmMember, setConfirmMember] = useState<TeamMember | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [confirmLeaderTransfer, setConfirmLeaderTransfer] = useState<TeamMember | null>(null);
+  const [changingLeaderId, setChangingLeaderId] = useState<string | null>(null);
+  const [teamPolicy, setTeamPolicy] = useState({
+    team_leader_required: true,
+    allow_leader_change: false,
+    allow_member_removal: true,
+  });
 
   const [kanbanTasks, setKanbanTasks] = useState<TrackerTask[]>([]);
   const [kanbanLoading, setKanbanLoading] = useState(false);
@@ -175,6 +184,7 @@ export default function TeamDashboard() {
         getMyInvitations(),
         getStudentMeetings(),
       ]);
+      const access = await getPublicSystemAccess();
 
       const nextTeams = teamRes?.teams || [];
       const nextInvitations = inviteRes?.invitations || [];
@@ -183,6 +193,11 @@ export default function TeamDashboard() {
       setTeams(nextTeams);
       setInvitations(nextInvitations);
       setMeetings(nextMeetings);
+      setTeamPolicy({
+        team_leader_required: Boolean(access.team_leader_required),
+        allow_leader_change: Boolean(access.allow_leader_change),
+        allow_member_removal: Boolean(access.allow_member_removal),
+      });
       setTeamCount(teamRes?.count ?? nextTeams.length ?? 0);
       setInviteCount(inviteRes?.count ?? nextInvitations.length ?? 0);
       setMeetingCount(nextMeetings.filter((item) => item.status === "scheduled").length);
@@ -323,6 +338,28 @@ export default function TeamDashboard() {
     }
   };
 
+  const handleChangeLeader = async (newLeaderEnrollmentId: string) => {
+    if (!selectedTeam) return;
+
+    try {
+      setChangingLeaderId(newLeaderEnrollmentId);
+      setPanelError("");
+      setPanelSuccess("");
+      await changeTeamLeader(selectedTeam.team_id, newLeaderEnrollmentId);
+      await loadTeamWorkspace(selectedTeam.team_id);
+      await loadDashboardData();
+      setPanelSuccess(`Leadership transferred to ${newLeaderEnrollmentId}`);
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : null;
+      setPanelError(message || "Failed to change team leader");
+    } finally {
+      setChangingLeaderId(null);
+    }
+  };
+
   const createKanbanTask = async () => {
     const projectId = String(selectedTeam?.projects?.[0]?.project_id || "");
     if (!projectId) {
@@ -411,7 +448,8 @@ export default function TeamDashboard() {
       if (selectedTeamId && selectedTeam) {
         const projectId = String(selectedTeam.projects?.[0]?.project_id || "");
         const isLeader = !!myId && selectedTeam.leader_enrollment_id.trim() === myId;
-        const locked = !!selectedTeam.projects?.length;
+        const allowLeaderChange =
+          teamPolicy.team_leader_required && teamPolicy.allow_leader_change;
 
         return (
           <section className="workspace-card space-y-6">
@@ -451,13 +489,25 @@ export default function TeamDashboard() {
               <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Team Members</h3>
-                  <p className="text-sm text-slate-500">Click remove only if you are the leader and the team is not locked.</p>
+                  <p className="text-sm text-slate-500">
+                    Member actions follow admin policies.{" "}
+                    {isLeader && teamPolicy.team_leader_required && !teamPolicy.allow_leader_change ? (
+                      <span className="font-medium text-amber-600">
+                        Leader transfer is currently disabled by admin.
+                      </span>
+                    ) : isLeader && teamPolicy.allow_leader_change ? (
+                      <span>Transfer leader is available.</span>
+                    ) : (
+                      <span>Transfer leader is available only when enabled by admin.</span>
+                    )}
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-3">
                 {selectedTeam.members.map((member) => {
-                  const removable = isLeader && !locked && !member.is_leader;
+                  const removable = isLeader && teamPolicy.allow_member_removal && !member.is_leader;
+                  const transferable = isLeader && allowLeaderChange && !member.is_leader;
                   return (
                     <div
                       key={member.enrollment_id}
@@ -469,15 +519,28 @@ export default function TeamDashboard() {
                         {member.is_leader && <p className="text-xs font-semibold text-indigo-600 mt-1">Team Leader</p>}
                       </div>
 
-                      {removable ? (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmMember(member)}
-                          className="rounded-lg bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-200"
-                        >
-                          Remove
-                        </button>
-                      ) : null}
+                      <div className="flex items-center gap-2">
+                        {transferable ? (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmLeaderTransfer(member)}
+                            disabled={changingLeaderId === member.enrollment_id}
+                            className="rounded-lg bg-indigo-100 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-200 disabled:opacity-50"
+                          >
+                            {changingLeaderId === member.enrollment_id ? "Transferring..." : "Make Leader"}
+                          </button>
+                        ) : null}
+
+                        {removable ? (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmMember(member)}
+                            className="rounded-lg bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-200"
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })}
@@ -839,6 +902,44 @@ export default function TeamDashboard() {
           {teamDetailLoading ? <div className="workspace-card text-slate-500">Loading team workspace...</div> : renderActivePanel()}
         </main>
       </div>
+
+      {confirmLeaderTransfer ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">Transfer Leadership?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              You are about to transfer team leadership to{" "}
+              <b>{confirmLeaderTransfer.name || confirmLeaderTransfer.student_name || confirmLeaderTransfer.enrollment_id}</b>{" "}
+              <span className="text-slate-400">({confirmLeaderTransfer.enrollment_id})</span>.
+              You will become a regular member.
+            </p>
+            <p className="mt-2 text-xs text-amber-600 font-medium">
+              This action cannot be undone unless the new leader transfers it back.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmLeaderTransfer(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = confirmLeaderTransfer;
+                  setConfirmLeaderTransfer(null);
+                  void handleChangeLeader(target.enrollment_id);
+                }}
+                disabled={changingLeaderId === confirmLeaderTransfer.enrollment_id}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                Yes, Transfer Leadership
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {confirmMember ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

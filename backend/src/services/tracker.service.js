@@ -17,6 +17,7 @@ import {
   getNextSubmissionFileVersion,
   createSubmissionFile,
   getSubmissionFiles,
+  countSubmissionFiles,
   createWeekReview,
   getWeekReviews,
   createTask,
@@ -55,6 +56,7 @@ import {
   isValidWeekTransition,
   isValidTaskTransition,
 } from '../validators/tracker.validator.js';
+import { getAdminSystemSettingsService } from './systemSettings.service.js';
 
 const assertWeekExists = async (weekId) => {
   const week = await getWeekById(weekId);
@@ -63,6 +65,18 @@ const assertWeekExists = async (weekId) => {
   }
   return week;
 };
+
+const DAY_TO_DOW = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+const DOW_TO_DAY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 const assertProjectExists = async (projectId) => {
   const project = await getProjectById(projectId);
@@ -98,13 +112,34 @@ const assertProjectAccess = async ({ projectId, userKey, role }) => {
   throw new Error('Invalid role');
 };
 
-const assertWeekEditable = (week) => {
+const assertWeekEditable = ({ week, systemSettings }) => {
   if (week.status === 'locked' || week.status === 'missed') {
     throw new Error('This week is locked and cannot be edited');
   }
 
-  if (week.deadline_at && new Date(week.deadline_at).getTime() < Date.now()) {
+  const deadlineMs = week.deadline_at ? new Date(week.deadline_at).getTime() : null;
+  if (!deadlineMs || Number.isNaN(deadlineMs)) {
+    return;
+  }
+
+  const nowMs = Date.now();
+  if (deadlineMs >= nowMs) {
+    return;
+  }
+
+  if (!systemSettings.allow_late_submission) {
     throw new Error('Submission deadline has passed for this week');
+  }
+
+  if (systemSettings.auto_lock_week_after_deadline) {
+    throw new Error('Late submissions are blocked because auto-lock-after-deadline is enabled');
+  }
+
+  if (systemSettings.grace_enabled) {
+    const graceMs = Number(systemSettings.grace_period_hours || 0) * 60 * 60 * 1000;
+    if (nowMs > deadlineMs + graceMs) {
+      throw new Error('Grace period has ended for this week');
+    }
   }
 };
 
@@ -263,11 +298,19 @@ export const bootstrapProjectWeeksService = async ({
   actorUserKey,
   actorRole,
 }) => {
-  if (!projectId || !totalWeeks || !startDate) {
-    throw new Error('projectId, totalWeeks and startDate are required');
+  const systemSettings = await getAdminSystemSettingsService();
+
+  if (!projectId) {
+    throw new Error('projectId is required');
   }
 
-  if (totalWeeks < 1 || totalWeeks > 52) {
+  const resolvedTotalWeeks = Number(totalWeeks || systemSettings.total_project_weeks);
+  const resolvedStartDate =
+    startDate ||
+    systemSettings.project_start_date ||
+    new Date().toISOString().slice(0, 10);
+
+  if (resolvedTotalWeeks < 1 || resolvedTotalWeeks > 52) {
     throw new Error('totalWeeks must be between 1 and 52');
   }
 
@@ -276,9 +319,13 @@ export const bootstrapProjectWeeksService = async ({
 
   const weeks = await bootstrapProjectWeeks({
     projectId,
-    totalWeeks,
-    startDate,
+    totalWeeks: resolvedTotalWeeks,
+    startDate: resolvedStartDate,
     phasePlan: phasePlan || [],
+    daysPerWeek: Number(systemSettings.days_per_week || 7),
+    deadlineTime: String(systemSettings.deadline_time || '23:59:00'),
+    deadlineDayDow:
+      DAY_TO_DOW[String(systemSettings.deadline_day || '').toLowerCase()] ?? null,
   });
 
   await createTimelineEvent({
@@ -288,8 +335,11 @@ export const bootstrapProjectWeeksService = async ({
     actorUserKey,
     actorRole,
     meta: {
-      totalWeeks,
-      startDate,
+      totalWeeks: resolvedTotalWeeks,
+      startDate: resolvedStartDate,
+      daysPerWeek: Number(systemSettings.days_per_week || 7),
+      deadlineTime: String(systemSettings.deadline_time || '23:59:00'),
+      deadlineDay: String(systemSettings.deadline_day || 'sunday').toLowerCase(),
     },
   });
 
@@ -359,6 +409,15 @@ export const updateWeekStatusService = async ({
   }
 
   const week = await assertWeekExists(weekId);
+  const systemSettings = await getAdminSystemSettingsService();
+
+  const isUnlockAttempt =
+    ['locked', 'missed'].includes(String(week.status || '').toLowerCase()) &&
+    !['locked', 'missed'].includes(normalizedStatus);
+
+  if (isUnlockAttempt && !systemSettings.allow_admin_unlock_week) {
+    throw new Error('Week unlock is currently disabled by admin settings');
+  }
 
   if (week.status !== normalizedStatus && !isValidWeekTransition(week.status, normalizedStatus)) {
     throw new Error(`Invalid week transition from ${week.status} to ${normalizedStatus}`);
@@ -393,13 +452,48 @@ export const createWeekSubmissionService = async ({
   role,
   isResubmission = false,
 }) => {
+  const systemSettings = await getAdminSystemSettingsService();
+  if (!systemSettings.enable_weekly_submissions) {
+    throw new Error('Weekly submissions are currently disabled by admin');
+  }
+
   if (!weekId || !summaryOfWork) {
     throw new Error('weekId and summaryOfWork are required');
   }
 
   const week = await assertWeekExists(weekId);
   await assertProjectAccess({ projectId: week.project_id, userKey, role });
-  assertWeekEditable(week);
+  assertWeekEditable({ week, systemSettings });
+
+  const allowedDays = new Set(
+    (Array.isArray(systemSettings.submission_allowed_days)
+      ? systemSettings.submission_allowed_days
+      : []
+    )
+      .map((day) => String(day || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const today = DOW_TO_DAY[new Date().getDay()];
+  if (allowedDays.size && !allowedDays.has(today)) {
+    throw new Error(
+      `Submissions are not allowed on ${today}. Allowed days: ${Array.from(allowedDays).join(', ')}`
+    );
+  }
+
+  if (Number(week.week_number) > Number(systemSettings.total_submission_weeks)) {
+    throw new Error(
+      `Weekly submission is not allowed beyond configured submission weeks (${systemSettings.total_submission_weeks})`
+    );
+  }
+
+  const requiredFields = new Set(
+    (Array.isArray(systemSettings.required_submission_fields)
+      ? systemSettings.required_submission_fields
+      : []
+    )
+      .map((field) => String(field || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
 
   if (!isResubmission && week.status !== 'pending') {
     throw new Error(`New submission is allowed only in pending state. Current state: ${week.status}`);
@@ -409,10 +503,32 @@ export const createWeekSubmissionService = async ({
     throw new Error(`Resubmission is allowed only in rejected state. Current state: ${week.status}`);
   }
 
+  if (isResubmission && !systemSettings.allow_resubmission) {
+    throw new Error('Resubmission is currently disabled by admin');
+  }
+
   const project = await assertProjectExists(week.project_id);
   const normalizedGithubRepoUrl = normalizeUrl(githubRepoUrl);
   const normalizedGithubSnapshot = normalizeUrl(githubLinkSnapshot);
   const hasPermanentRepo = Boolean(String(project.github_repo_url || '').trim());
+
+  if (requiredFields.has('blockers') && !String(blockers || '').trim()) {
+    throw new Error('Blockers field is required by admin settings');
+  }
+
+  if (requiredFields.has('next_week_plan') && !String(nextWeekPlan || '').trim()) {
+    throw new Error('Next week plan is required by admin settings');
+  }
+
+  if (
+    requiredFields.has('github_repository_link') &&
+    !normalizedGithubRepoUrl &&
+    !normalizedGithubSnapshot &&
+    !hasPermanentRepo
+  ) {
+    throw new Error('GitHub repository link is required by admin settings');
+  }
+
   const isRepoCaptureWeek = week.week_number === 2 || week.week_number === 3;
 
   if (!hasPermanentRepo && isRepoCaptureWeek && !normalizedGithubRepoUrl) {
@@ -454,6 +570,15 @@ export const createWeekSubmissionService = async ({
 
   const revisionNo = await getNextSubmissionRevision(week.week_id);
 
+  if (isResubmission) {
+    const maxResubmissions = Number(systemSettings.max_resubmissions);
+    const usedResubmissions = Math.max(0, revisionNo - 2);
+
+    if (usedResubmissions >= maxResubmissions) {
+      throw new Error(`Maximum resubmission limit reached (${maxResubmissions})`);
+    }
+  }
+
   const submission = await createWeekSubmission({
     weekId: week.week_id,
     projectId: week.project_id,
@@ -471,6 +596,14 @@ export const createWeekSubmissionService = async ({
 
   await updateWeekStatus({ weekId: week.week_id, status: 'submitted' });
 
+  const deadlineMs = week.deadline_at ? new Date(week.deadline_at).getTime() : null;
+  const submittedMs = submission.submitted_at ? new Date(submission.submitted_at).getTime() : Date.now();
+  const isLateSubmission =
+    Number.isFinite(deadlineMs) && Number.isFinite(submittedMs) ? submittedMs > deadlineMs : false;
+  const lateHours = isLateSubmission
+    ? Number((((submittedMs - deadlineMs) / (1000 * 60 * 60))).toFixed(2))
+    : 0;
+
   await createTimelineEvent({
     projectId: week.project_id,
     weekId: week.week_id,
@@ -480,12 +613,24 @@ export const createWeekSubmissionService = async ({
     meta: {
       submission_id: submission.submission_id,
       revision_no: submission.revision_no,
+      is_late_submission: isLateSubmission,
+      late_by_hours: lateHours,
+      late_submission_penalty_percent: isLateSubmission
+        ? Number(systemSettings.late_submission_penalty_percent)
+        : 0,
     },
   });
 
   await deleteWeekDraft({ weekId: week.week_id, authorUserKey: userKey });
 
-  return submission;
+  return {
+    ...submission,
+    is_late_submission: isLateSubmission,
+    late_by_hours: lateHours,
+    late_submission_penalty_percent: isLateSubmission
+      ? Number(systemSettings.late_submission_penalty_percent)
+      : 0,
+  };
 };
 
 export const getWeekDraftService = async ({ weekId, userKey, role }) => {
@@ -518,9 +663,10 @@ export const saveWeekDraftService = async ({
   userKey,
   role,
 }) => {
+  const systemSettings = await getAdminSystemSettingsService();
   const week = await assertWeekExists(weekId);
   await assertProjectAccess({ projectId: week.project_id, userKey, role });
-  assertWeekEditable(week);
+  assertWeekEditable({ week, systemSettings });
 
   return await upsertWeekDraft({
     weekId: week.week_id,
@@ -556,6 +702,33 @@ export const createSubmissionFileService = async ({
   const submission = await getSubmissionById(submissionId);
   if (!submission) {
     throw new Error('Submission not found');
+  }
+
+  const systemSettings = await getAdminSystemSettingsService();
+
+  const ext = String(fileName || '').includes('.')
+    ? String(fileName).split('.').pop().toLowerCase()
+    : '';
+  const allowedExtensions = new Set(
+    (Array.isArray(systemSettings.allowed_file_types) ? systemSettings.allowed_file_types : [])
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  if (allowedExtensions.size && ext && !allowedExtensions.has(ext)) {
+    throw new Error(
+      `File type .${ext} is not allowed. Allowed types: ${Array.from(allowedExtensions).join(', ')}`
+    );
+  }
+
+  const maxBytes = Number(systemSettings.max_file_size_mb) * 1024 * 1024;
+  if (Number(fileSizeBytes || 0) > maxBytes) {
+    throw new Error(`File size exceeds maximum limit (${systemSettings.max_file_size_mb} MB)`);
+  }
+
+  const currentFileCount = await countSubmissionFiles(submission.submission_id);
+  if (currentFileCount >= Number(systemSettings.max_files_per_submission)) {
+    throw new Error(`Maximum files per submission reached (${systemSettings.max_files_per_submission})`);
   }
 
   await assertProjectAccess({ projectId: submission.project_id, userKey, role });
@@ -609,6 +782,8 @@ export const reviewSubmissionService = async ({
   reviewerEmployeeId,
   role,
 }) => {
+  const systemSettings = await getAdminSystemSettingsService();
+
   if (!submissionId || !action) {
     throw new Error('submissionId and action are required');
   }
@@ -620,6 +795,24 @@ export const reviewSubmissionService = async ({
 
   if (normalizedAction === 'reject' && !reviewComment) {
     throw new Error('reviewComment is required when rejecting submission');
+  }
+
+  if (normalizedAction === 'approve') {
+    const requiredFields = new Set(
+      (Array.isArray(systemSettings.required_submission_fields)
+        ? systemSettings.required_submission_fields
+        : []
+      )
+        .map((field) => String(field || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    if (requiredFields.has('file_upload')) {
+      const fileCount = await countSubmissionFiles(submissionId);
+      if (fileCount < 1) {
+        throw new Error('At least one file upload is required before approval as per admin settings');
+      }
+    }
   }
 
   const submission = await getSubmissionById(submissionId);
@@ -687,6 +880,22 @@ export const reviewSubmissionService = async ({
       action: normalizedAction,
     },
   });
+
+  if (normalizedAction === 'approve' && systemSettings.auto_lock_week_after_review) {
+    await updateWeekStatus({ weekId: submission.week_id, status: 'locked' });
+
+    await createTimelineEvent({
+      projectId: submission.project_id,
+      weekId: submission.week_id,
+      eventType: 'week_auto_locked_after_review',
+      actorUserKey: reviewerEmployeeId,
+      actorRole: role,
+      meta: {
+        submission_id: submission.submission_id,
+        trigger_action: normalizedAction,
+      },
+    });
+  }
 
   await notifyProjectMembersForWeeklyReview({
     projectId: submission.project_id,

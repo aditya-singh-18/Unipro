@@ -252,6 +252,7 @@ import UiverseButton from '@/components/ui/uiverse-button'
 
 import { createProject } from '@/services/project.service'
 import { getMyTeams } from '@/services/team/team.service'
+import { getPublicSystemAccess } from '@/services/systemSettings.service'
 import { CreateProjectPayload } from '@/types/project'
 import {
   TRACK_OPTIONS,
@@ -261,6 +262,11 @@ import {
 
 type Team = {
   team_id: string
+  team_name: string
+  leader_enrollment_id: string
+  is_leader: boolean
+  has_project: boolean
+  project_title: string | null
 }
 
 export default function CreateProjectPage() {
@@ -284,15 +290,28 @@ export default function CreateProjectPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [techError, setTechError] = useState<string | null>(null)
+  const [projectCreationAllowed, setProjectCreationAllowed] = useState(true)
 
   /* ================= FETCH TEAMS ================= */
   useEffect(() => {
     const fetchTeams = async () => {
       try {
-        const res = await getMyTeams()
-        setTeams(res?.teams ?? [])
+        const [res, access] = await Promise.all([
+          getMyTeams(),
+          getPublicSystemAccess(),
+        ])
+        const allTeams: Team[] = res?.teams ?? []
+        setTeams(allTeams)
+        setProjectCreationAllowed(Boolean(access.allow_project_creation))
+
+        // Auto-select if exactly one eligible team
+        const eligible = allTeams.filter((t) => t.is_leader && !t.has_project)
+        if (eligible.length === 1) {
+          setTeamId(eligible[0].team_id)
+        }
       } catch {
         setTeams([])
+        setProjectCreationAllowed(true)
       }
     }
     fetchTeams()
@@ -384,6 +403,11 @@ export default function CreateProjectPage() {
       return
     }
 
+    if (!projectCreationAllowed) {
+      setError('Project creation is currently disabled by admin')
+      return
+    }
+
     const mergedTech = Array.from(
       new Set(Object.values(techStackMap).flat())
     )
@@ -440,6 +464,12 @@ export default function CreateProjectPage() {
 
             {/* FORM */}
             <div className="glass rounded-2xl p-5 md:p-6">
+              {!projectCreationAllowed && (
+                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                  Project creation is currently disabled by admin settings.
+                </p>
+              )}
+
               {error && (
                 <p className="mb-4 text-red-600 font-medium">{error}</p>
               )}
@@ -451,18 +481,33 @@ export default function CreateProjectPage() {
                 {/* TEAM */}
                 <div className="md:col-span-2">
                   <label className="form-label">Team *</label>
-                  <select
-                    className="form-input"
-                    value={teamId}
-                    onChange={(e) => setTeamId(e.target.value)}
-                  >
-                    <option value="">Select your team</option>
-                    {teams.map((t) => (
-                      <option key={t.team_id} value={t.team_id}>
-                        {t.team_id}
-                      </option>
-                    ))}
-                  </select>
+                  {(() => {
+                    const eligibleTeams = teams.filter(
+                      (t) => t.is_leader && !t.has_project
+                    )
+                    if (!projectCreationAllowed) return null
+                    if (eligibleTeams.length === 0) {
+                      return (
+                        <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                          No eligible teams found. You must be the team leader and the team must not already have a project.
+                        </p>
+                      )
+                    }
+                    return (
+                      <select
+                        className="form-input"
+                        value={teamId}
+                        onChange={(e) => setTeamId(e.target.value)}
+                      >
+                        <option value="">Select your team</option>
+                        {eligibleTeams.map((t) => (
+                          <option key={t.team_id} value={t.team_id}>
+                            {t.team_name ? `${t.team_name} (${t.team_id})` : t.team_id}
+                          </option>
+                        ))}
+                      </select>
+                    )
+                  })()}
                 </div>
 
                 {/* TITLE */}
@@ -472,6 +517,7 @@ export default function CreateProjectPage() {
                     className="form-input"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    disabled={!projectCreationAllowed}
                   />
                 </div>
 
@@ -482,6 +528,7 @@ export default function CreateProjectPage() {
                     className="form-input min-h-35"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
+                    disabled={!projectCreationAllowed}
                   />
                 </div>
 
@@ -494,6 +541,7 @@ export default function CreateProjectPage() {
                     onChange={(e) =>
                       addTrack(e.target.value as Track)
                     }
+                    disabled={!projectCreationAllowed}
                   >
                     <option value="">Select Track</option>
                     {TRACK_OPTIONS.map((t) => (
@@ -548,6 +596,7 @@ export default function CreateProjectPage() {
                                   type="checkbox"
                                   checked={pendingTechOptions.includes(tech)}
                                   onChange={() => togglePendingTech(tech)}
+                                  disabled={!projectCreationAllowed}
                                   className="h-4 w-4 accent-blue-600"
                                 />
                               </label>
@@ -569,6 +618,7 @@ export default function CreateProjectPage() {
                             )
                             setPendingTechOptions(values)
                           }}
+                          disabled={!projectCreationAllowed}
                         >
                           {pendingTechOptions.map((tech) => (
                             <option key={tech} value={tech}>
@@ -582,6 +632,7 @@ export default function CreateProjectPage() {
                       type="button"
                       variant="create"
                       onClick={addTech}
+                      disabled={!projectCreationAllowed}
                     >
                       Add Selected
                     </UiverseButton>
@@ -597,11 +648,13 @@ export default function CreateProjectPage() {
                       onChange={(e) =>
                         setCustomTechInput(e.target.value)
                       }
+                      disabled={!projectCreationAllowed}
                     />
                     <UiverseButton
                       type="button"
                       variant="create"
                       onClick={addCustomTech}
+                      disabled={!projectCreationAllowed}
                     >
                       Add
                     </UiverseButton>
@@ -638,7 +691,7 @@ export default function CreateProjectPage() {
                 <div className="md:col-span-2 pt-4">
                   <UiverseButton
                     variant="create"
-                    disabled={loading}
+                    disabled={loading || !projectCreationAllowed}
                     type="submit"
                   >
                     {loading ? 'Submitting…' : 'Create Project'}

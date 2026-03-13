@@ -27,6 +27,7 @@ import {
 } from '../repositories/team.repo.js';
 import { findUserByIdentifier, findUserByEnrollmentId } from '../repositories/user.repo.js';
 import { pushNotification } from './notification.service.js';
+import { getPublicSystemAccessService } from './systemSettings.service.js';
 
 
 
@@ -42,6 +43,12 @@ export const createProjectService = async ({
   githubRepoUrl,
   requesterEnrollmentId,
 }) => {
+  const access = await getPublicSystemAccessService();
+
+  if (!access.allow_project_creation) {
+    throw new Error('Project creation is currently disabled by admin');
+  }
+
   // 🔒 BASIC VALIDATION (UPDATED)
   if (!teamId || !title || !description || !track) {
     throw new Error(

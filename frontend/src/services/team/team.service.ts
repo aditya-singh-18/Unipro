@@ -39,3 +39,6 @@ export const createTeam = async (
 // in team.service.ts
 export const removeTeamMember = (teamId: string, memberEnrollmentId: string) =>
   api.post("/team/remove-member", { teamId, memberEnrollmentId });
+
+export const changeTeamLeader = (teamId: string, newLeaderEnrollmentId: string) =>
+  api.post("/team/change-leader", { teamId, newLeaderEnrollmentId });

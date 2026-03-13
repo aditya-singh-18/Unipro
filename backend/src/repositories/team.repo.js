@@ -205,3 +205,47 @@ export const deleteTeam = async (teamId) => {
   const q = `DELETE FROM teams WHERE team_id = $1`;
   await pool.query(q, [teamId]);
 };
+
+export const updateTeamLeaderEnrollment = async (teamId, newLeaderEnrollmentId) => {
+  const q = `
+    UPDATE teams
+    SET leader_enrollment_id = $2
+    WHERE team_id = $1
+  `;
+  await pool.query(q, [teamId, newLeaderEnrollmentId]);
+};
+
+export const updateTeamMemberLeaderFlag = async (teamId, enrollmentId, isLeader) => {
+  const q = `
+    UPDATE team_members
+    SET is_leader = $3
+    WHERE team_id = $1
+      AND enrollment_id = $2
+  `;
+  await pool.query(q, [teamId, enrollmentId, Boolean(isLeader)]);
+};
+
+export const countTeamMemberChanges = async (teamId) => {
+  const q = `
+    SELECT COUNT(*)::int AS count
+    FROM team_member_change_log
+    WHERE team_id = $1
+  `;
+
+  const r = await pool.query(q, [teamId]);
+  return Number(r.rows?.[0]?.count || 0);
+};
+
+export const logTeamMemberChange = async ({ teamId, enrollmentId, action, actedBy }) => {
+  const q = `
+    INSERT INTO team_member_change_log (
+      team_id,
+      enrollment_id,
+      action,
+      acted_by
+    )
+    VALUES ($1, $2, $3, $4)
+  `;
+
+  await pool.query(q, [teamId, enrollmentId, action, actedBy || null]);
+};

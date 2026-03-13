@@ -45,7 +45,8 @@
     "smoke:tracker:phase7:security": "node scripts/runTrackerPhase7SecuritySmoke.mjs",
     "smoke:tracker:phase7:all": "npm run smoke:tracker:phase7:unit && npm run smoke:tracker:phase7:api && npm run smoke:tracker:phase7:e2e && npm run smoke:tracker:phase7:perf && npm run smoke:tracker:phase7:security",
     "smoke:tracker:departments": "node scripts/runTrackerDepartmentLeaderboardSmoke.mjs",
-    "smoke:tracker:batch-action": "node scripts/runTrackerBatchActionSmoke.mjs"
+    "smoke:tracker:batch-action": "node scripts/runTrackerBatchActionSmoke.mjs",
+    "smoke:system-settings": "node scripts/runSystemSettingsSmoke.mjs"
   },
   "nodemonConfig": {
     "ignore": [

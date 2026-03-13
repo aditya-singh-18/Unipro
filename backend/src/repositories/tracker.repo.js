@@ -54,7 +54,15 @@ export const setProjectGithubRepoUrlIfEmpty = async ({ projectId, githubRepoUrl 
   return rows[0] || null;
 };
 
-export const bootstrapProjectWeeks = async ({ projectId, totalWeeks, startDate, phasePlan }) => {
+export const bootstrapProjectWeeks = async ({
+  projectId,
+  totalWeeks,
+  startDate,
+  phasePlan,
+  daysPerWeek = 7,
+  deadlineTime = '23:59:00',
+  deadlineDayDow = null,
+}) => {
   const q = `
     INSERT INTO project_weeks (
       project_id,
@@ -68,8 +76,24 @@ export const bootstrapProjectWeeks = async ({ projectId, totalWeeks, startDate, 
       $1,
       gs AS week_number,
       pp.phase_name,
-      ($3::date + ((gs - 1) * INTERVAL '7 day'))::date AS starts_on,
-      (($3::date + (gs * INTERVAL '7 day'))::timestamp - INTERVAL '1 second') AS deadline_at,
+      ($3::date + ((gs - 1) * ($5::int * INTERVAL '1 day')))::date AS starts_on,
+      (
+        ($3::date + ((gs - 1) * ($5::int * INTERVAL '1 day')))
+        + (
+          CASE
+            WHEN $7::int IS NULL THEN (($5::int - 1) * INTERVAL '1 day')
+            ELSE
+              (
+                ((
+                  $7::int
+                  - EXTRACT(DOW FROM ($3::date + ((gs - 1) * ($5::int * INTERVAL '1 day'))))::int
+                  + 7
+                ) % 7) * INTERVAL '1 day'
+              )
+          END
+        )
+        + $6::time
+      )::timestamp AS deadline_at,
       'pending' AS status
     FROM generate_series(1, $2) gs
     LEFT JOIN LATERAL (
@@ -92,6 +116,9 @@ export const bootstrapProjectWeeks = async ({ projectId, totalWeeks, startDate, 
     totalWeeks,
     startDate,
     JSON.stringify(phasePlan || []),
+    daysPerWeek,
+    deadlineTime,
+    deadlineDayDow,
   ]);
 
   return rows;
@@ -323,6 +350,17 @@ export const getSubmissionFiles = async (submissionId) => {
   `;
   const { rows } = await pool.query(q, [submissionId]);
   return rows;
+};
+
+export const countSubmissionFiles = async (submissionId) => {
+  const q = `
+    SELECT COUNT(*)::int AS count
+    FROM week_submission_files
+    WHERE submission_id = $1
+  `;
+
+  const { rows } = await pool.query(q, [submissionId]);
+  return Number(rows?.[0]?.count || 0);
 };
 
 export const createWeekReview = async ({
