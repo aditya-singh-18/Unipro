@@ -35,6 +35,12 @@ export default function LoginPage() {
     allow_team_creation: true,
     allow_project_creation: true,
     enable_weekly_submissions: true,
+    team_leader_required: true,
+    allow_leader_change: false,
+    allow_member_removal: true,
+    min_team_size: 1,
+    max_team_size: 5,
+    allow_solo_projects: false,
   });
 
   useEffect(() => {
