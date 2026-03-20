@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
 import {
   approveRecommendedMentor,
@@ -44,17 +44,7 @@ export default function MentorSelectionModal({
   const [recommendations, setRecommendations] = useState<MentorRecommendation[]>([]);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      void fetchMentors();
-      void fetchRecommendations();
-      setError("");
-      setSuccess("");
-      setSelectedMentor(null);
-    }
-  }, [isOpen]);
-
-  const fetchMentors = async () => {
+  const fetchMentors = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get("/mentor/admin/active");
@@ -69,9 +59,9 @@ export default function MentorSelectionModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = useCallback(async () => {
     try {
       setRecommendationLoading(true);
       const response = await getProjectMentorRecommendations(projectId, { limit: 5 });
@@ -86,7 +76,17 @@ export default function MentorSelectionModal({
     } finally {
       setRecommendationLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void fetchMentors();
+      void fetchRecommendations();
+      setError("");
+      setSuccess("");
+      setSelectedMentor(null);
+    }
+  }, [fetchMentors, fetchRecommendations, isOpen]);
 
   const handleAssignMentor = async () => {
     if (!selectedMentor) {

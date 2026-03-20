@@ -61,21 +61,6 @@ const initialDashboardStats: MentorTrackerDashboardStats = {
   approved_weeks: 0,
 };
 
-const initialAggregates: AggregatedMetrics = {
-  totalWeeks: 0,
-  pendingWeeks: 0,
-  submittedWeeks: 0,
-  approvedWeeks: 0,
-  rejectedWeeks: 0,
-  missedWeeks: 0,
-  totalTasks: 0,
-  todoTasks: 0,
-  inProgressTasks: 0,
-  reviewTasks: 0,
-  blockedTasks: 0,
-  doneTasks: 0,
-};
-
 const toAggregates = (weeks: TrackerWeek[], tasks: TrackerTask[]): AggregatedMetrics => ({
   totalWeeks: weeks.length,
   pendingWeeks: weeks.filter((w) => w.status === "pending").length,
@@ -198,7 +183,6 @@ export default function MentorAnalyticsPage() {
 
   const allWeeks = useMemo(() => Object.values(weeksByProject).flat(), [weeksByProject]);
   const allTasks = useMemo(() => Object.values(tasksByProject).flat(), [tasksByProject]);
-  const allAggregates = useMemo(() => toAggregates(allWeeks, allTasks), [allWeeks, allTasks]);
 
   const selectedProjectIds = useMemo(() => {
     if (selectedProjectId === "all") {

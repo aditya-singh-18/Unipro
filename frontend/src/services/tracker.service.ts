@@ -568,7 +568,7 @@ export const getProjectTimelineHistory = async (
   );
 
   const timeline = Array.isArray(res.data?.timeline) ? res.data.timeline : [];
-  return timeline.map((item: any) => ({
+  return timeline.map((item: Record<string, unknown>) => ({
     project_id: String(item.project_id || projectId),
     week_id: item.week_id ?? null,
     source: 'timeline',
