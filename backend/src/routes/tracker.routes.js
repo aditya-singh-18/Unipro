@@ -48,6 +48,20 @@ import {
   updateEscalationFollowUp,
   uploadSubmissionFile,
 } from '../controllers/tracker.controller.js';
+import {
+  createDailyLog,
+  getDailyLogs,
+  deleteDailyLog,
+  calculateProgressScore,
+  getProgressScores,
+  getLatestProgressScore,
+  createGithubCommit,
+  getGithubCommits,
+  createMentorFeedback,
+  getMentorFeedback,
+  markFeedbackAsRead,
+  replyToFeedback,
+} from '../controllers/protrackEnhancement.controller.js';
 
 const router = express.Router();
 
@@ -382,6 +396,123 @@ router.patch(
   authenticate,
   allowRoles('ADMIN'),
   updateEscalationFollowUp
+);
+
+// ============================================================
+// PROTRACK ENHANCEMENT ROUTES
+// ============================================================
+
+// Daily Logs Routes
+router.post(
+  '/projects/:projectId/daily-logs',
+  authenticate,
+  allowRoles('STUDENT'),
+  sanitizeRequestBody([
+    { name: 'whatIDid', type: 'string' },
+    { name: 'whatIWillDo', type: 'string' },
+    { name: 'blockers', type: 'string' },
+    { name: 'tag', type: 'string' },
+    { name: 'commitLink', type: 'url' },
+  ]),
+  createDailyLog
+);
+
+router.get(
+  '/projects/:projectId/daily-logs',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  getDailyLogs
+);
+
+router.delete(
+  '/daily-logs/:logId',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  deleteDailyLog
+);
+
+// Progress Scores Routes
+router.post(
+  '/projects/:projectId/progress-scores/calculate',
+  authenticate,
+  allowRoles('MENTOR', 'ADMIN'),
+  sanitizeRequestBody([
+    { name: 'studentUserKey', type: 'string' },
+  ]),
+  calculateProgressScore
+);
+
+router.get(
+  '/projects/:projectId/progress-scores',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  getProgressScores
+);
+
+router.get(
+  '/projects/:projectId/progress-scores/latest/:studentUserKey',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  getLatestProgressScore
+);
+
+// GitHub Commits Routes
+router.post(
+  '/projects/:projectId/github-commits',
+  authenticate,
+  allowRoles('MENTOR', 'ADMIN'),
+  sanitizeRequestBody([
+    { name: 'studentUserKey', type: 'string' },
+    { name: 'sha', type: 'string' },
+    { name: 'message', type: 'string' },
+    { name: 'branch', type: 'string' },
+  ]),
+  createGithubCommit
+);
+
+router.get(
+  '/projects/:projectId/github-commits',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  getGithubCommits
+);
+
+// Mentor Feedback Routes
+router.post(
+  '/projects/:projectId/mentor-feedback',
+  authenticate,
+  allowRoles('MENTOR'),
+  sanitizeRequestBody([
+    { name: 'studentUserKey', type: 'string' },
+    { name: 'referenceType', type: 'string' },
+    { name: 'referenceId', type: 'string' },
+    { name: 'message', type: 'string' },
+  ]),
+  createMentorFeedback
+);
+
+router.get(
+  '/projects/:projectId/mentor-feedback',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  getMentorFeedback
+);
+
+router.patch(
+  '/mentor-feedback/:feedbackId/read',
+  authenticate,
+  allowRoles('STUDENT'),
+  markFeedbackAsRead
+);
+
+router.patch(
+  '/mentor-feedback/:feedbackId/reply',
+  authenticate,
+  allowRoles('STUDENT'),
+  sanitizeRequestBody([
+    { name: 'studentReply', type: 'string' },
+  ]),
+  replyToFeedback
 );
 
 export default router;

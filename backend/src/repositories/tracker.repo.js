@@ -1720,3 +1720,530 @@ export const getProgressReportRows = async ({
 
   return rows;
 };
+
+// ============================================================
+// DAILY LOGS REPOSITORY
+// ============================================================
+
+export const createDailyLog = async ({
+  studentUserKey,
+  projectId,
+  taskId,
+  weekId,
+  logDate,
+  whatIDid,
+  whatIWillDo,
+  blockers,
+  tag,
+  commitCount,
+  commitLink,
+  hoursSpent,
+  isLate,
+  aiSummary,
+}) => {
+  const q = `
+    INSERT INTO daily_logs (
+      student_user_key,
+      project_id,
+      task_id,
+      week_id,
+      log_date,
+      what_i_did,
+      what_i_will_do,
+      blockers,
+      tag,
+      commit_count,
+      commit_link,
+      hours_spent,
+      is_late,
+      ai_summary
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    ON CONFLICT (student_user_key, project_id, log_date)
+    DO UPDATE SET
+      task_id = EXCLUDED.task_id,
+      week_id = EXCLUDED.week_id,
+      what_i_did = EXCLUDED.what_i_did,
+      what_i_will_do = EXCLUDED.what_i_will_do,
+      blockers = EXCLUDED.blockers,
+      tag = EXCLUDED.tag,
+      commit_count = EXCLUDED.commit_count,
+      commit_link = EXCLUDED.commit_link,
+      hours_spent = EXCLUDED.hours_spent,
+      is_late = EXCLUDED.is_late,
+      ai_summary = EXCLUDED.ai_summary
+    RETURNING
+      log_id,
+      student_user_key,
+      project_id,
+      task_id,
+      week_id,
+      log_date,
+      what_i_did,
+      what_i_will_do,
+      blockers,
+      tag,
+      commit_count,
+      commit_link,
+      hours_spent,
+      is_late,
+      ai_summary,
+      created_at
+  `;
+  const { rows } = await pool.query(q, [
+    studentUserKey,
+    projectId,
+    taskId || null,
+    weekId || null,
+    logDate,
+    whatIDid,
+    whatIWillDo,
+    blockers || null,
+    tag,
+    commitCount || 0,
+    commitLink || null,
+    hoursSpent || null,
+    isLate || false,
+    aiSummary || null,
+  ]);
+  return rows[0];
+};
+
+export const getDailyLogsByProject = async ({ projectId, studentUserKey, startDate, endDate, limit = 50 }) => {
+  const q = `
+    SELECT
+      log_id,
+      student_user_key,
+      project_id,
+      task_id,
+      week_id,
+      log_date,
+      what_i_did,
+      what_i_will_do,
+      blockers,
+      tag,
+      commit_count,
+      commit_link,
+      hours_spent,
+      is_late,
+      ai_summary,
+      created_at
+    FROM daily_logs
+    WHERE project_id = $1
+      AND ($2::varchar IS NULL OR student_user_key = $2::varchar)
+      AND ($3::date IS NULL OR log_date >= $3::date)
+      AND ($4::date IS NULL OR log_date <= $4::date)
+    ORDER BY log_date DESC, created_at DESC
+    LIMIT $5
+  `;
+  const { rows } = await pool.query(q, [projectId, studentUserKey || null, startDate || null, endDate || null, limit]);
+  return rows;
+};
+
+export const getDailyLogById = async (logId) => {
+  const q = `
+    SELECT
+      log_id,
+      student_user_key,
+      project_id,
+      task_id,
+      week_id,
+      log_date,
+      what_i_did,
+      what_i_will_do,
+      blockers,
+      tag,
+      commit_count,
+      commit_link,
+      hours_spent,
+      is_late,
+      ai_summary,
+      created_at
+    FROM daily_logs
+    WHERE log_id = $1
+  `;
+  const { rows } = await pool.query(q, [logId]);
+  return rows[0] || null;
+};
+
+export const deleteDailyLog = async (logId) => {
+  const q = `DELETE FROM daily_logs WHERE log_id = $1 RETURNING log_id`;
+  const { rows } = await pool.query(q, [logId]);
+  return rows[0] || null;
+};
+
+// ============================================================
+// PROGRESS SCORES REPOSITORY
+// ============================================================
+
+export const upsertProgressScore = async ({
+  studentUserKey,
+  projectId,
+  weekNumber,
+  gitScore,
+  taskScore,
+  submissionScore,
+  logScore,
+  totalScore,
+  progressPct,
+  streakDays,
+  riskLevel,
+  daysSinceCommit,
+  overdueTaskCount,
+}) => {
+  const q = `
+    INSERT INTO progress_scores (
+      student_user_key,
+      project_id,
+      week_number,
+      git_score,
+      task_score,
+      submission_score,
+      log_score,
+      total_score,
+      progress_pct,
+      streak_days,
+      risk_level,
+      days_since_commit,
+      overdue_task_count
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    ON CONFLICT (student_user_key, project_id, week_number)
+    DO UPDATE SET
+      git_score = EXCLUDED.git_score,
+      task_score = EXCLUDED.task_score,
+      submission_score = EXCLUDED.submission_score,
+      log_score = EXCLUDED.log_score,
+      total_score = EXCLUDED.total_score,
+      progress_pct = EXCLUDED.progress_pct,
+      streak_days = EXCLUDED.streak_days,
+      risk_level = EXCLUDED.risk_level,
+      days_since_commit = EXCLUDED.days_since_commit,
+      overdue_task_count = EXCLUDED.overdue_task_count,
+      calculated_at = now()
+    RETURNING
+      score_id,
+      student_user_key,
+      project_id,
+      week_number,
+      git_score,
+      task_score,
+      submission_score,
+      log_score,
+      total_score,
+      progress_pct,
+      streak_days,
+      risk_level,
+      days_since_commit,
+      overdue_task_count,
+      calculated_at
+  `;
+  const { rows } = await pool.query(q, [
+    studentUserKey,
+    projectId,
+    weekNumber,
+    gitScore || 0,
+    taskScore || 0,
+    submissionScore || 0,
+    logScore || 0,
+    totalScore || 0,
+    progressPct || 0,
+    streakDays || 0,
+    riskLevel || 'low',
+    daysSinceCommit || 0,
+    overdueTaskCount || 0,
+  ]);
+  return rows[0];
+};
+
+export const getProgressScoresByProject = async ({ projectId, studentUserKey, weekNumber }) => {
+  const q = `
+    SELECT
+      score_id,
+      student_user_key,
+      project_id,
+      week_number,
+      git_score,
+      task_score,
+      submission_score,
+      log_score,
+      total_score,
+      progress_pct,
+      streak_days,
+      risk_level,
+      days_since_commit,
+      overdue_task_count,
+      calculated_at
+    FROM progress_scores
+    WHERE project_id = $1
+      AND ($2::varchar IS NULL OR student_user_key = $2::varchar)
+      AND ($3::int IS NULL OR week_number = $3::int)
+    ORDER BY week_number DESC, calculated_at DESC
+  `;
+  const { rows } = await pool.query(q, [projectId, studentUserKey || null, weekNumber || null]);
+  return rows;
+};
+
+export const getLatestProgressScore = async ({ studentUserKey, projectId }) => {
+  const q = `
+    SELECT
+      score_id,
+      student_user_key,
+      project_id,
+      week_number,
+      git_score,
+      task_score,
+      submission_score,
+      log_score,
+      total_score,
+      progress_pct,
+      streak_days,
+      risk_level,
+      days_since_commit,
+      overdue_task_count,
+      calculated_at
+    FROM progress_scores
+    WHERE student_user_key = $1 AND project_id = $2
+    ORDER BY week_number DESC, calculated_at DESC
+    LIMIT 1
+  `;
+  const { rows } = await pool.query(q, [studentUserKey, projectId]);
+  return rows[0] || null;
+};
+
+// ============================================================
+// GITHUB COMMITS REPOSITORY
+// ============================================================
+
+export const createGithubCommit = async ({
+  studentUserKey,
+  projectId,
+  sha,
+  message,
+  committedAt,
+  branch,
+  additions,
+  deletions,
+  isMergeCommit,
+}) => {
+  const q = `
+    INSERT INTO github_commits (
+      student_user_key,
+      project_id,
+      sha,
+      message,
+      committed_at,
+      branch,
+      additions,
+      deletions,
+      is_merge_commit
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ON CONFLICT (sha) DO NOTHING
+    RETURNING
+      commit_id,
+      student_user_key,
+      project_id,
+      sha,
+      message,
+      committed_at,
+      branch,
+      additions,
+      deletions,
+      is_merge_commit,
+      created_at
+  `;
+  const { rows } = await pool.query(q, [
+    studentUserKey,
+    projectId,
+    sha,
+    message || null,
+    committedAt,
+    branch || null,
+    additions || 0,
+    deletions || 0,
+    isMergeCommit || false,
+  ]);
+  return rows[0] || null;
+};
+
+export const getGithubCommitsByProject = async ({ projectId, studentUserKey, startDate, endDate, limit = 100 }) => {
+  const q = `
+    SELECT
+      commit_id,
+      student_user_key,
+      project_id,
+      sha,
+      message,
+      committed_at,
+      branch,
+      additions,
+      deletions,
+      is_merge_commit,
+      created_at
+    FROM github_commits
+    WHERE project_id = $1
+      AND ($2::varchar IS NULL OR student_user_key = $2::varchar)
+      AND ($3::timestamptz IS NULL OR committed_at >= $3::timestamptz)
+      AND ($4::timestamptz IS NULL OR committed_at <= $4::timestamptz)
+    ORDER BY committed_at DESC
+    LIMIT $5
+  `;
+  const { rows } = await pool.query(q, [
+    projectId,
+    studentUserKey || null,
+    startDate || null,
+    endDate || null,
+    limit,
+  ]);
+  return rows;
+};
+
+export const getGithubCommitBySha = async (sha) => {
+  const q = `
+    SELECT
+      commit_id,
+      student_user_key,
+      project_id,
+      sha,
+      message,
+      committed_at,
+      branch,
+      additions,
+      deletions,
+      is_merge_commit,
+      created_at
+    FROM github_commits
+    WHERE sha = $1
+  `;
+  const { rows } = await pool.query(q, [sha]);
+  return rows[0] || null;
+};
+
+// ============================================================
+// MENTOR FEEDBACK REPOSITORY
+// ============================================================
+
+export const createMentorFeedback = async ({
+  mentorEmployeeId,
+  studentUserKey,
+  projectId,
+  referenceType,
+  referenceId,
+  message,
+  rating,
+}) => {
+  const q = `
+    INSERT INTO mentor_feedback (
+      mentor_employee_id,
+      student_user_key,
+      project_id,
+      reference_type,
+      reference_id,
+      message,
+      rating
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING
+      feedback_id,
+      mentor_employee_id,
+      student_user_key,
+      project_id,
+      reference_type,
+      reference_id,
+      message,
+      rating,
+      is_read,
+      student_reply,
+      created_at
+  `;
+  const { rows } = await pool.query(q, [
+    mentorEmployeeId,
+    studentUserKey,
+    projectId,
+    referenceType || null,
+    referenceId || null,
+    message,
+    rating || null,
+  ]);
+  return rows[0];
+};
+
+export const getMentorFeedbackByProject = async ({ projectId, studentUserKey, mentorEmployeeId, limit = 50 }) => {
+  const q = `
+    SELECT
+      feedback_id,
+      mentor_employee_id,
+      student_user_key,
+      project_id,
+      reference_type,
+      reference_id,
+      message,
+      rating,
+      is_read,
+      student_reply,
+      created_at
+    FROM mentor_feedback
+    WHERE project_id = $1
+      AND ($2::varchar IS NULL OR student_user_key = $2::varchar)
+      AND ($3::varchar IS NULL OR mentor_employee_id = $3::varchar)
+    ORDER BY created_at DESC
+    LIMIT $4
+  `;
+  const { rows } = await pool.query(q, [projectId, studentUserKey || null, mentorEmployeeId || null, limit]);
+  return rows;
+};
+
+export const getMentorFeedbackById = async (feedbackId) => {
+  const q = `
+    SELECT
+      feedback_id,
+      mentor_employee_id,
+      student_user_key,
+      project_id,
+      reference_type,
+      reference_id,
+      message,
+      rating,
+      is_read,
+      student_reply,
+      created_at
+    FROM mentor_feedback
+    WHERE feedback_id = $1
+  `;
+  const { rows } = await pool.query(q, [feedbackId]);
+  return rows[0] || null;
+};
+
+export const markMentorFeedbackAsRead = async (feedbackId) => {
+  const q = `
+    UPDATE mentor_feedback
+    SET is_read = true
+    WHERE feedback_id = $1
+    RETURNING feedback_id, is_read
+  `;
+  const { rows } = await pool.query(q, [feedbackId]);
+  return rows[0] || null;
+};
+
+export const addStudentReplyToFeedback = async ({ feedbackId, studentReply }) => {
+  const q = `
+    UPDATE mentor_feedback
+    SET student_reply = $2
+    WHERE feedback_id = $1
+    RETURNING
+      feedback_id,
+      mentor_employee_id,
+      student_user_key,
+      project_id,
+      reference_type,
+      reference_id,
+      message,
+      rating,
+      is_read,
+      student_reply,
+      created_at
+  `;
+  const { rows } = await pool.query(q, [feedbackId, studentReply]);
+  return rows[0] || null;
+};
