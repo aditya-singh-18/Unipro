@@ -1,11 +1,17 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import config from '../config/env.js';
 
 const jwtSecret = config.jwtSecret;
 const jwtExpiry = config.jwtExpiry;
 
 export const generateToken = (payload) => {
-  return jwt.sign(payload, jwtSecret, {
+  const jwtPayload = {
+    ...payload,
+    jti: crypto.randomUUID(),
+  };
+
+  return jwt.sign(jwtPayload, jwtSecret, {
     expiresIn: jwtExpiry,
   });
 };

@@ -119,7 +119,13 @@ export const deleteAdminSkill = async (req, res, next) => {
 
 export const adminRegisterUser = async (req, res, next) => {
   try {
-    const result = await adminRegisterUserService(req.body);
+    // user_key is generated server-side — never trust client-supplied IDs
+    const { user_key: _ignoredUserKey, ...safeBody } = req.body || {};
+    const result = await adminRegisterUserService({
+      payload: safeBody,
+      actorUser: req.user,
+      actorIp: req.ip,
+    });
 
     res.status(201).json({
       message: 'User registered successfully',
@@ -182,8 +188,8 @@ export const getUserStatistics = async (req, res, next) => {
 ========================= */
 export const getAllStudents = async (req, res, next) => {
   try {
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = Math.min(parsePositiveInt(req.query.limit, 10), 100);
+    const page = req.query.page;
+    const limit = req.query.limit;
     const search = (req.query.search || req.query.q || '').toString();
 
     const result = await getAllStudentsService(page, limit, search);
@@ -198,8 +204,8 @@ export const getAllStudents = async (req, res, next) => {
 ========================= */
 export const getAllMentors = async (req, res, next) => {
   try {
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = Math.min(parsePositiveInt(req.query.limit, 10), 100);
+    const page = req.query.page;
+    const limit = req.query.limit;
     const search = (req.query.search || req.query.q || '').toString();
 
     const result = await getAllMentorsService(page, limit, search);
@@ -214,8 +220,8 @@ export const getAllMentors = async (req, res, next) => {
 ========================= */
 export const getAllUsers = async (req, res, next) => {
   try {
-    const page = parsePositiveInt(req.query.page, 1);
-    const limit = Math.min(parsePositiveInt(req.query.limit, 10), 100);
+    const page = req.query.page;
+    const limit = req.query.limit;
     const search = (req.query.search || req.query.q || '').toString();
 
     const result = await getAllUsersService(page, limit, search);

@@ -571,6 +571,15 @@ export const createTimelineEvent = async ({
   actorRole,
   meta,
 }) => {
+  let safeActorUserKey = actorUserKey || null;
+
+  if (safeActorUserKey) {
+    const actorExists = await pool.query('SELECT 1 FROM users WHERE user_key = $1 LIMIT 1', [safeActorUserKey]);
+    if (actorExists.rowCount === 0) {
+      safeActorUserKey = null;
+    }
+  }
+
   const q = `
     INSERT INTO project_activity_timeline (
       project_id,
@@ -588,7 +597,7 @@ export const createTimelineEvent = async ({
     projectId,
     weekId || null,
     eventType,
-    actorUserKey || null,
+    safeActorUserKey,
     actorRole || null,
     JSON.stringify(meta || {}),
   ]);

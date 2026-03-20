@@ -22,6 +22,8 @@ export const updateAdminSystemSettings = async (req, res, next) => {
     const settings = await updateAdminSystemSettingsService({
       payload: req.body,
       actorUserKey: req.user.user_key,
+      actorUser: req.user,
+      actorIp: req.ip,
     });
 
     res.json({ success: true, data: settings, message: 'System settings updated successfully' });

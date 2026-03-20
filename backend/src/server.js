@@ -7,6 +7,7 @@ import { autoActivateApprovedProjects } from './repositories/project.repo.js';
 import { startTrackerReminderScheduler } from './jobs/trackerReminder.job.js';
 import { startTrackerWeekClosureScheduler } from './jobs/trackerWeekClosure.job.js';
 import { startTrackerEscalationScheduler } from './jobs/trackerEscalation.job.js';
+import pool from './config/db.js';
 
 dotenv.config();
 
@@ -35,6 +36,37 @@ startTrackerWeekClosureScheduler();
 
 // 🔹 Tracker escalation scheduler
 startTrackerEscalationScheduler();
+
+const verifySuperAdminBootstrap = async () => {
+  const superAdminEmail = String(process.env.SUPER_ADMIN_EMAIL || '').trim().toLowerCase();
+  if (!superAdminEmail) {
+    console.warn('[SECURITY] SUPER_ADMIN_EMAIL is not set. Configure it in environment for admin hardening.');
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT user_key, is_super_admin
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+        LIMIT 1
+      `,
+      [superAdminEmail]
+    );
+
+    const mappedUser = result.rows?.[0];
+    if (!mappedUser || mappedUser.is_super_admin !== true) {
+      console.warn(
+        '[SECURITY] SUPER_ADMIN_EMAIL is configured but not assigned as is_super_admin=true. Set it manually in DB.'
+      );
+    }
+  } catch (error) {
+    console.warn('[SECURITY] Could not verify SUPER_ADMIN_EMAIL mapping:', error.message);
+  }
+};
+
+verifySuperAdminBootstrap();
 
 // 🔹 Start server
 server.listen(PORT, () => {

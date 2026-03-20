@@ -559,6 +559,29 @@ export const getProjectStatusHistory = async (
   return res.data?.history || [];
 };
 
+export const getProjectTimelineHistory = async (
+  projectId: string,
+  limit = 20
+): Promise<ProjectStatusHistoryItem[]> => {
+  const res = await axios.get(
+    `/tracker/projects/${projectId}/timeline?page=1&pageSize=${encodeURIComponent(String(limit))}`
+  );
+
+  const timeline = Array.isArray(res.data?.timeline) ? res.data.timeline : [];
+  return timeline.map((item: any) => ({
+    project_id: String(item.project_id || projectId),
+    week_id: item.week_id ?? null,
+    source: 'timeline',
+    event_type: String(item.event_type || 'status_updated'),
+    old_status: null,
+    new_status: null,
+    reason: null,
+    changed_by: item.actor_user_key ? String(item.actor_user_key) : null,
+    changed_role: item.actor_role ? String(item.actor_role) : null,
+    created_at: String(item.created_at || new Date().toISOString()),
+  }));
+};
+
 export const getAdminMentorLoadTrends = async (limit = 20): Promise<AdminMentorLoadItem[]> => {
   const res = await axios.get(`/tracker/dashboard/admin/mentor-load?limit=${encodeURIComponent(String(limit))}`);
   return res.data?.items || [];

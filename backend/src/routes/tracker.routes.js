@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticate } from '../middlewares/auth.middleware.js';
 import { allowRoles } from '../middlewares/role.middleware.js';
 import { uploadSingle } from '../middlewares/upload.middleware.js';
+import { sanitizeRequestBody } from '../middlewares/sanitize.middleware.js';
 import {
   bootstrapProjectWeeks,
   getProjectWeeks,
@@ -83,6 +84,8 @@ router.patch(
   '/weeks/:weekId/status',
   authenticate,
   allowRoles('ADMIN'),
+  // SECURITY: Input sanitized by sanitize middleware before reaching service layer
+  sanitizeRequestBody([{ name: 'reason', type: 'string' }]),
   updateWeekStatus
 );
 
@@ -90,6 +93,13 @@ router.post(
   '/weeks/:weekId/submissions',
   authenticate,
   allowRoles('STUDENT'),
+  // SECURITY: Input sanitized by sanitize middleware before reaching service layer
+  sanitizeRequestBody([
+    { name: 'summaryOfWork', type: 'string' },
+    { name: 'blockers', type: 'string' },
+    { name: 'nextWeekPlan', type: 'string' },
+    { name: 'githubLinkSnapshot', type: 'url' },
+  ]),
   createWeekSubmission
 );
 
@@ -104,6 +114,13 @@ router.put(
   '/weeks/:weekId/draft',
   authenticate,
   allowRoles('STUDENT'),
+  // SECURITY: Input sanitized by sanitize middleware before reaching service layer
+  sanitizeRequestBody([
+    { name: 'summaryOfWork', type: 'string' },
+    { name: 'blockers', type: 'string' },
+    { name: 'nextWeekPlan', type: 'string' },
+    { name: 'githubLinkSnapshot', type: 'url' },
+  ]),
   saveWeekDraft
 );
 
@@ -111,6 +128,13 @@ router.post(
   '/weeks/:weekId/submissions/resubmit',
   authenticate,
   allowRoles('STUDENT'),
+  // SECURITY: Input sanitized by sanitize middleware before reaching service layer
+  sanitizeRequestBody([
+    { name: 'summaryOfWork', type: 'string' },
+    { name: 'blockers', type: 'string' },
+    { name: 'nextWeekPlan', type: 'string' },
+    { name: 'githubLinkSnapshot', type: 'url' },
+  ]),
   resubmitWeekSubmission
 );
 
@@ -125,6 +149,12 @@ router.post(
   '/submissions/:submissionId/files',
   authenticate,
   allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  // SECURITY: Input sanitized by sanitize middleware before reaching service layer
+  sanitizeRequestBody([
+    { name: 'fileName', type: 'string' },
+    { name: 'fileUrl', type: 'url' },
+    { name: 'mimeType', type: 'string' },
+  ]),
   createSubmissionFile
 );
 
@@ -139,6 +169,8 @@ router.post(
   '/submissions/:submissionId/review',
   authenticate,
   allowRoles('MENTOR'),
+  // SECURITY: Input sanitized by sanitize middleware before reaching service layer
+  sanitizeRequestBody([{ name: 'reviewComment', type: 'string' }]),
   reviewSubmission
 );
 
@@ -180,7 +212,7 @@ router.get(
 router.get(
   '/projects/:projectId/status-history',
   authenticate,
-  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  allowRoles('ADMIN'),
   getProjectStatusHistory
 );
 

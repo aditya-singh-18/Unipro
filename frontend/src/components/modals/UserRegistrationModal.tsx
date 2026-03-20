@@ -15,10 +15,32 @@ export default function UserRegistrationModal({
   onClose,
   onUserRegistered,
 }: UserRegistrationModalProps) {
-  const USER_KEY_REGEX = /^[A-Za-z0-9_-]{3,40}$/;
   const NAME_REGEX = /^[A-Za-z .'-]{2,100}$/;
   const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/;
+
+  const getPasswordRuleErrors = (password: string): string[] => {
+    const errors: string[] = [];
+
+    if (password.length < 10) errors.push("Must be at least 10 characters");
+    if (!/[A-Z]/.test(password)) errors.push("Must contain at least one uppercase letter");
+    if (!/[a-z]/.test(password)) errors.push("Must contain at least one lowercase letter");
+    if (!/[0-9]/.test(password)) errors.push("Must contain at least one digit");
+    if (!SPECIAL_CHAR_REGEX.test(password)) errors.push("Must contain at least one special character");
+
+    return errors;
+  };
+
+  const getPasswordStrength = (password: string) => {
+    const errors = getPasswordRuleErrors(password);
+    const passed = 5 - errors.length;
+
+    if (passed <= 1) return { label: "Weak", color: "bg-red-500", passed, errors };
+    if (passed <= 3) return { label: "Fair", color: "bg-orange-500", passed, errors };
+    if (passed === 4) return { label: "Strong", color: "bg-yellow-500", passed, errors };
+    return { label: "Very Strong", color: "bg-green-500", passed, errors };
+  };
 
   const [step, setStep] = useState<"role" | "form">("role");
   const [selectedRole, setSelectedRole] = useState<"STUDENT" | "MENTOR" | "ADMIN" | null>(null);
@@ -27,7 +49,6 @@ export default function UserRegistrationModal({
   const [success, setSuccess] = useState("");
 
   const [formData, setFormData] = useState({
-    user_key: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -41,6 +62,10 @@ export default function UserRegistrationModal({
     roll_number: "",
     student_email: "",
   });
+
+  const passwordStrength = getPasswordStrength(formData.password);
+  const passwordsMatch =
+    formData.confirmPassword.length === 0 || formData.password === formData.confirmPassword;
 
   const handleRoleSelect = (role: "STUDENT" | "MENTOR" | "ADMIN") => {
     setSelectedRole(role);
@@ -57,7 +82,6 @@ export default function UserRegistrationModal({
   };
 
   const validateForm = (): boolean => {
-    const normalizedUserKey = formData.user_key.trim();
     const normalizedEmail = formData.email.trim().toLowerCase();
     const normalizedName = formData.full_name.trim();
     const normalizedDepartment = formData.department.trim();
@@ -66,13 +90,8 @@ export default function UserRegistrationModal({
     const normalizedRollNo = formData.roll_number.trim();
     const normalizedContact = formData.contact_number.trim();
 
-    if (!normalizedUserKey || !normalizedEmail || !formData.password || !normalizedName) {
+    if (!normalizedEmail || !formData.password || !normalizedName) {
       setError("Please fill all required fields");
-      return false;
-    }
-
-    if (!USER_KEY_REGEX.test(normalizedUserKey)) {
-      setError("User ID format invalid. Use 3-40 chars: letters, numbers, _ or -");
       return false;
     }
 
@@ -91,14 +110,9 @@ export default function UserRegistrationModal({
       return false;
     }
 
-    if (
-      formData.password.length < 8 ||
-      !/[a-z]/.test(formData.password) ||
-      !/[A-Z]/.test(formData.password) ||
-      !/[0-9]/.test(formData.password) ||
-      !/[^A-Za-z0-9]/.test(formData.password)
-    ) {
-      setError("Password must be 8+ chars with upper, lower, number and special character");
+    const passwordErrors = getPasswordRuleErrors(formData.password);
+    if (passwordErrors.length > 0) {
+      setError(passwordErrors.join(". "));
       return false;
     }
 
@@ -147,7 +161,6 @@ export default function UserRegistrationModal({
       setError("");
 
       const payload = {
-        user_key: formData.user_key.trim(),
         role: selectedRole,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
@@ -202,7 +215,6 @@ export default function UserRegistrationModal({
     setStep("role");
     setSelectedRole(null);
     setFormData({
-      user_key: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -299,28 +311,6 @@ export default function UserRegistrationModal({
           {/* STEP 2: REGISTRATION FORM */}
           {step === "form" && selectedRole && (
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* NON-EDITABLE USER ID */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700">
-                  User ID <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="user_key"
-                  value={formData.user_key}
-                  onChange={handleInputChange}
-                  placeholder={selectedRole === "STUDENT" ? "ENR2024001" : "EMP2024001"}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-                  minLength={3}
-                  maxLength={40}
-                  pattern="[A-Za-z0-9_-]{3,40}"
-                  required
-                />
-                <p className="text-xs text-slate-500">
-                  {selectedRole === "STUDENT" ? "Enrollment ID" : "Employee ID"} - unique value only
-                </p>
-              </div>
-
               {/* EMAIL */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700">
@@ -351,9 +341,25 @@ export default function UserRegistrationModal({
                     onChange={handleInputChange}
                     placeholder="••••••••"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    minLength={8}
+                    minLength={10}
                     required
                   />
+                  <div className="space-y-2">
+                    <div className="h-2 w-full rounded bg-slate-200 overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${passwordStrength.color}`}
+                        style={{ width: `${(passwordStrength.passed / 5) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-xs font-medium text-slate-600">Strength: {passwordStrength.label}</p>
+                    {passwordStrength.errors.length > 0 && (
+                      <div className="space-y-1">
+                        {passwordStrength.errors.map((rule) => (
+                          <p key={rule} className="text-xs text-red-600">{rule}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -367,9 +373,12 @@ export default function UserRegistrationModal({
                     onChange={handleInputChange}
                     placeholder="••••••••"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
-                    minLength={8}
+                    minLength={10}
                     required
                   />
+                  {!passwordsMatch && (
+                    <p className="text-xs text-red-600">Passwords do not match</p>
+                  )}
                 </div>
               </div>
 
@@ -554,9 +563,9 @@ export default function UserRegistrationModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !passwordsMatch || !["Strong", "Very Strong"].includes(passwordStrength.label)}
                   className={`px-6 py-2 rounded-lg font-semibold transition text-white ${
-                    loading
+                    loading || !passwordsMatch || !["Strong", "Very Strong"].includes(passwordStrength.label)
                       ? "bg-slate-400 cursor-not-allowed"
                       : "bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                   }`}

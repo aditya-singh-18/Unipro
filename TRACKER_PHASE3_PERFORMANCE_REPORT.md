@@ -1,11 +1,11 @@
 # Tracker Phase 3 Performance Probe
 
-Generated At: 2026-03-11T05:50:39.109Z
+Generated At: 2026-03-20T10:21:01.119Z
 Runs: 5
 
-Compliance API service p95: 71.1 ms
-Compliance samples: 59.29, 69.95, 64.36, 61.55, 71.1
+Compliance API service p95: 111.34 ms
+Compliance samples: 111.34, 77.5, 107.62, 62.04, 63.5
 
-Status history service project: CSE000004
-Status history p95: 39.49 ms
-Status history samples: 35.7, 38.72, 33.04, 39.49, 32.27
+Status history service project: CSE000009
+Status history p95: 35.78 ms
+Status history samples: 31.08, 27.42, 35.78, 28.39, 30.91

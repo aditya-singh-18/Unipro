@@ -1,5 +1,7 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { isTokenRevoked } from './utils/tokenBlacklist.js';
+import pool from './config/db.js';
 
 let io;
 
@@ -13,7 +15,7 @@ export const initSocket = (httpServer) => {
     cors: {
       origin: (origin, callback) => {
         if (!origin && process.env.NODE_ENV !== 'production') return callback(null, true);
-        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
         callback(new Error(`Socket CORS blocked: origin '${origin}' not allowed`));
       },
       credentials: true,
@@ -21,7 +23,7 @@ export const initSocket = (httpServer) => {
   });
 
   // 🔐 JWT AUTH MIDDLEWARE
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
 
@@ -34,10 +36,34 @@ export const initSocket = (httpServer) => {
         process.env.JWT_SECRET
       );
 
+      if (decoded?.jti) {
+        const revoked = await isTokenRevoked(decoded.jti);
+        if (revoked) {
+          return next(new Error('Token has been revoked'));
+        }
+      }
+
+      if (decoded?.token_version !== undefined && decoded?.user_key) {
+        const versionResult = await pool.query(
+          'SELECT token_version FROM users WHERE user_key = $1 LIMIT 1',
+          [decoded.user_key]
+        );
+
+        if (versionResult.rowCount === 0) {
+          return next(new Error('Invalid token user'));
+        }
+
+        const currentVersion = Number(versionResult.rows[0].token_version || 0);
+        if (Number(decoded.token_version) !== currentVersion) {
+          return next(new Error('Token has been invalidated'));
+        }
+      }
+
       // attach user to socket
       socket.user = {
         user_key: decoded.user_key,
         role: decoded.role,
+        is_super_admin: decoded.is_super_admin === true,
       };
 
       return next();
@@ -53,7 +79,7 @@ export const initSocket = (httpServer) => {
     socket.join(user_key);
 
     // ✅ ADMIN ROOM JOIN (YAHI LINE POORI QUERY KA ANSWER HAI)
-    if (role === 'admin') {
+    if (String(role).toUpperCase() === 'ADMIN') {
       socket.join('ADMIN_AUDIT_ROOM');
     }
 

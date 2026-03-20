@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticate } from "../middlewares/auth.middleware.js";
 import { allowRoles } from "../middlewares/role.middleware.js";
+import { sanitizeRequestBody } from "../middlewares/sanitize.middleware.js";
 import {
   getStudentProfile,
   updateStudentBio,
@@ -24,6 +25,8 @@ router.put(
   "/bio",
   authenticate,
   allowRoles("STUDENT"),
+  // SECURITY: Input sanitized by sanitize middleware before reaching service layer
+  sanitizeRequestBody([{ name: 'bio', type: 'string' }]),
   updateStudentBio
 );
 

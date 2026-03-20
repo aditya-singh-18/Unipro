@@ -243,8 +243,8 @@
 // }
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import Sidebar from '@/components/sidebar/StudentSidebar'
 import Topbar from '@/components/dashboard/Topbar'
@@ -271,6 +271,8 @@ type Team = {
 
 export default function CreateProjectPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const prefillAppliedRef = useRef(false)
 
   /* ================= BASIC ================= */
   const [teams, setTeams] = useState<Team[]>([])
@@ -291,6 +293,7 @@ export default function CreateProjectPage() {
   const [error, setError] = useState<string | null>(null)
   const [techError, setTechError] = useState<string | null>(null)
   const [projectCreationAllowed, setProjectCreationAllowed] = useState(true)
+  const [prefillSource, setPrefillSource] = useState<string | null>(null)
 
   /* ================= FETCH TEAMS ================= */
   useEffect(() => {
@@ -321,6 +324,45 @@ export default function CreateProjectPage() {
     setPendingTechOptions([])
     setTechError(null)
   }, [activeTrack])
+
+  useEffect(() => {
+    if (prefillAppliedRef.current) return
+
+    const ideaId = searchParams.get('ideaId') || ''
+    const ideaTitle = searchParams.get('ideaTitle') || ''
+    const ideaDescription = searchParams.get('ideaDescription') || ''
+    const ideaTracks = (searchParams.get('ideaTracks') || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value): value is Track => TRACK_OPTIONS.includes(value as Track))
+    const ideaTech = (searchParams.get('ideaTech') || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+
+    if (!ideaId && !ideaTitle && !ideaDescription && ideaTracks.length === 0 && ideaTech.length === 0) {
+      prefillAppliedRef.current = true
+      return
+    }
+
+    if (ideaTitle) setTitle(ideaTitle)
+    if (ideaDescription) setDescription(ideaDescription)
+
+    if (ideaTracks.length > 0) {
+      setSelectedTracks(ideaTracks)
+      setActiveTrack(ideaTracks[0])
+    }
+
+    if (ideaTracks.length > 0 && ideaTech.length > 0) {
+      setTechStackMap({ [ideaTracks[0]]: ideaTech })
+    }
+
+    if (ideaId) {
+      setPrefillSource(`Idea prefilled from ${ideaId}`)
+    }
+
+    prefillAppliedRef.current = true
+  }, [searchParams])
 
   /* ================= TRACK ================= */
   const addTrack = (track: Track) => {
@@ -464,6 +506,12 @@ export default function CreateProjectPage() {
 
             {/* FORM */}
             <div className="glass rounded-2xl p-5 md:p-6">
+              {prefillSource && (
+                <p className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+                  {prefillSource}. Review details and submit your project.
+                </p>
+              )}
+
               {!projectCreationAllowed && (
                 <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
                   Project creation is currently disabled by admin settings.

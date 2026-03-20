@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticate } from '../middlewares/auth.middleware.js';
 import { allowRoles } from '../middlewares/role.middleware.js';
+import { requireSuperAdminForAdminRole } from '../middlewares/requireSuperAdmin.js';
 import {
   getAdminProfile,
   getAdminSkills,
@@ -68,6 +69,7 @@ router.post(
   '/register-user',
   authenticate,
   allowRoles('ADMIN'),
+  requireSuperAdminForAdminRole,
   adminRegisterUser
 );
 

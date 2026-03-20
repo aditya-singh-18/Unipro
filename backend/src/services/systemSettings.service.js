@@ -76,6 +76,7 @@ const normalizeSettings = (raw) => {
 
     allow_student_login: toBool(current.allow_student_login, true),
     allow_mentor_login: toBool(current.allow_mentor_login, true),
+    auto_restore_at: current.auto_restore_at || null,
     allow_team_creation: toBool(current.allow_team_creation, true),
     allow_project_creation: toBool(current.allow_project_creation, true),
     mentor_assignment_mode: MENTOR_ASSIGNMENT_MODES.includes(String(current.mentor_assignment_mode || '').toLowerCase())
@@ -165,7 +166,26 @@ const validateSettings = (settings) => {
 export const getAdminSystemSettingsService = async () => {
   try {
     const current = await getSystemSettings();
-    return normalizeSettings(current);
+    const normalized = normalizeSettings(current);
+
+    if (
+      normalized.auto_restore_at &&
+      new Date(normalized.auto_restore_at).getTime() <= Date.now() &&
+      (!normalized.allow_student_login || !normalized.allow_mentor_login)
+    ) {
+      const restored = await updateSystemSettings({
+        payload: {
+          allow_student_login: true,
+          allow_mentor_login: true,
+          auto_restore_at: null,
+        },
+        updatedBy: null,
+      });
+
+      return normalizeSettings(restored);
+    }
+
+    return normalized;
   } catch (error) {
     const msg = String(error?.message || '').toLowerCase();
     if (msg.includes('admin_system_settings') || msg.includes('does not exist')) {
@@ -175,9 +195,33 @@ export const getAdminSystemSettingsService = async () => {
   }
 };
 
-export const updateAdminSystemSettingsService = async ({ payload, actorUserKey }) => {
+export const updateAdminSystemSettingsService = async ({ payload, actorUserKey, actorUser, actorIp }) => {
   const before = await getAdminSystemSettingsService();
-  const merged = normalizeSettings({ ...before, ...(payload || {}) });
+  const incoming = { ...(payload || {}) };
+
+  const disableStudentRequested =
+    incoming.allow_student_login === false && before.allow_student_login !== false;
+  const disableMentorRequested = incoming.allow_mentor_login === false && before.allow_mentor_login !== false;
+
+  if (disableStudentRequested || disableMentorRequested) {
+    if (actorUser?.is_super_admin !== true) {
+      throw new Error('Only super admin can disable student/mentor login kill switches');
+    }
+
+    if (incoming.confirm !== true) {
+      throw new Error('Please confirm this action by including confirm: true in the request body.');
+    }
+
+    incoming.auto_restore_at = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+  }
+
+  if (incoming.allow_student_login === true && incoming.allow_mentor_login === true) {
+    incoming.auto_restore_at = null;
+  }
+
+  delete incoming.confirm;
+
+  const merged = normalizeSettings({ ...before, ...incoming });
 
   validateSettings(merged);
 
@@ -189,7 +233,10 @@ export const updateAdminSystemSettingsService = async ({ payload, actorUserKey }
     actionType: 'update',
     sectionName: 'admin_system_settings',
     beforeData: before,
-    afterData: normalized,
+    afterData: {
+      ...normalized,
+      actor_ip: actorIp || null,
+    },
   });
 
   return normalized;

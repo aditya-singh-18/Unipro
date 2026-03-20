@@ -327,9 +327,9 @@ const run = async () => {
     url: `${baseApi}/tracker/submissions/${latestSubmission.submission_id}/files`,
     token: studentToken,
     body: {
-      fileName: 'phase1-smoke-notes.txt',
-      fileUrl: 'https://example.com/files/phase1-smoke-notes.txt',
-      mimeType: 'text/plain',
+      fileName: 'phase1-smoke-notes.pdf',
+      fileUrl: 'https://github.com/github/gitignore/blob/main/README.md',
+      mimeType: 'application/pdf',
       fileSizeBytes: 2048,
     },
   });
@@ -392,6 +392,23 @@ const run = async () => {
 
   const latestForApprove = mentorSubsAfterResubmit.data?.submissions?.[0];
   if (latestForApprove?.submission_id && resubmit?.ok) {
+    const resubmittedUpload = await request({
+      method: 'POST',
+      url: `${baseApi}/tracker/submissions/${latestForApprove.submission_id}/files`,
+      token: studentToken,
+      body: {
+        fileName: 'phase1-smoke-resubmitted.pdf',
+        fileUrl: 'https://github.com/github/gitignore/blob/main/README.md',
+        mimeType: 'application/pdf',
+        fileSizeBytes: 2048,
+      },
+    });
+    addResult(
+      'Resubmission file upload metadata',
+      resubmittedUpload.ok ? 'PASS' : 'FAIL',
+      resubmittedUpload.ok ? `file_id=${resubmittedUpload.data?.file?.file_id ?? '-'}` : withMessage(resubmittedUpload)
+    );
+
     const approve = await request({
       method: 'POST',
       url: `${baseApi}/tracker/submissions/${latestForApprove.submission_id}/review`,

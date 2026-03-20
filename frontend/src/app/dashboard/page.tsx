@@ -11,7 +11,7 @@ import {
   getStudentTrackerDashboard,
   getProjectWeeks,
   getProjectTasks,
-  getProjectStatusHistory,
+  getProjectTimelineHistory,
   type TrackerWeek,
   type TrackerTask,
   type ProjectStatusHistoryItem,
@@ -96,7 +96,7 @@ export default function DashboardPage() {
       const [weeks, tasks, history] = await Promise.all([
         getProjectWeeks(projectId).catch(() => [] as TrackerWeek[]),
         getProjectTasks(projectId).catch(() => [] as TrackerTask[]),
-        getProjectStatusHistory(projectId, 5).catch(() => [] as ProjectStatusHistoryItem[]),
+        getProjectTimelineHistory(projectId, 5).catch(() => [] as ProjectStatusHistoryItem[]),
       ]);
       setProjectWeeks(weeks);
       setProjectTasks(tasks);

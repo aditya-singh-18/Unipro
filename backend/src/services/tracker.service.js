@@ -57,6 +57,7 @@ import {
   isValidTaskTransition,
 } from '../validators/tracker.validator.js';
 import { getAdminSystemSettingsService } from './systemSettings.service.js';
+import { sanitizeUrl } from '../middlewares/sanitize.middleware.js';
 
 const assertWeekExists = async (weekId) => {
   const week = await getWeekById(weekId);
@@ -699,6 +700,17 @@ export const createSubmissionFileService = async ({
     throw new Error('submissionId, fileName and fileUrl are required');
   }
 
+  if (String(fileUrl).length > 500) {
+    throw new Error('Invalid file URL. Maximum length is 500 characters.');
+  }
+
+  const sanitizedFileUrl = sanitizeUrl(fileUrl);
+  if (!sanitizedFileUrl) {
+    throw new Error('Invalid file URL. Only approved HTTPS domains are allowed.');
+  }
+
+  // SECURITY: Never fetch this URL server-side. Store only. Validate domain before storing.
+
   const submission = await getSubmissionById(submissionId);
   if (!submission) {
     throw new Error('Submission not found');
@@ -709,6 +721,22 @@ export const createSubmissionFileService = async ({
   const ext = String(fileName || '').includes('.')
     ? String(fileName).split('.').pop().toLowerCase()
     : '';
+
+  const extensionMimeMap = {
+    pdf: ['application/pdf'],
+    docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ppt: ['application/vnd.ms-powerpoint'],
+    pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    zip: ['application/zip', 'application/x-zip-compressed'],
+    png: ['image/png'],
+    jpg: ['image/jpeg'],
+    jpeg: ['image/jpeg'],
+  };
+
+  if (ext && mimeType && extensionMimeMap[ext] && !extensionMimeMap[ext].includes(String(mimeType).toLowerCase())) {
+    throw new Error('Invalid file metadata. Extension does not match MIME type.');
+  }
+
   const allowedExtensions = new Set(
     (Array.isArray(systemSettings.allowed_file_types) ? systemSettings.allowed_file_types : [])
       .map((item) => String(item || '').trim().toLowerCase())
@@ -738,7 +766,7 @@ export const createSubmissionFileService = async ({
     submissionId: submission.submission_id,
     versionNo,
     fileName,
-    fileUrl,
+    fileUrl: sanitizedFileUrl,
     mimeType,
     fileSizeBytes,
     uploadedByUserKey: userKey,

@@ -1,3 +1,5 @@
+# Last reviewed: 2026-03-20 - see SECURITY_AUDIT_FIXES.md
+
 # Dependencies
 node_modules/
 frontend/node_modules/
@@ -36,10 +38,14 @@ temp/
 *.tmp
 backend/uploads/
 backend/logs/
+backend/scripts/*.mjs
 
-# Accidental local files
-{
-String(id).trim()).filter(Boolean))]
-String(row.project_id))
-String(row.team_id))
-backend/console.log(c.column_name.padEnd(25)
+# Security-sensitive files
+*.pem
+*.key
+.env.local
+.env.production
+.env.staging
+**/secrets/
+**/.secrets/
+*.secret

@@ -1,5 +1,9 @@
 import pool from '../config/db.js'; // ← tum already use kar rahe ho
 import { logQueryResult } from '../utils/dbInspector.js';
+import { generateUniqueUserKey } from '../utils/userKeyGenerator.js';
+import { validateAndHashPassword } from '../utils/passwordPolicy.js';
+import { parsePagination } from '../utils/pagination.js';
+import crypto from 'crypto';
 
 // ADMIN PROFILE
 export const getAdminProfileService = async (employeeId) => {
@@ -143,18 +147,11 @@ export const deleteAdminSkillService = async (employeeId, id) => {
   }
 };
 
-import bcrypt from 'bcryptjs';
-
 const ALLOWED_ROLES = new Set(['STUDENT', 'MENTOR', 'ADMIN']);
 
 const isValidEmail = (value) => {
   if (!value || typeof value !== 'string') return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-};
-
-const isValidUserKey = (value) => {
-  if (!value || typeof value !== 'string') return false;
-  return /^[A-Za-z0-9_-]{3,40}$/.test(value.trim());
 };
 
 const isValidName = (value) => {
@@ -188,25 +185,25 @@ const normalizeText = (value) => {
 /* =========================
    ADMIN: REGISTER USER
 ========================= */
-export const adminRegisterUserService = async (payload) => {
-  const userKey = normalizeText(payload?.user_key);
+export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) => {
+  // SECURITY: user_key is generated server-side and client-supplied values are ignored.
   const role = normalizeText(payload?.role).toUpperCase();
   const email = normalizeText(payload?.email).toLowerCase();
   const password = payload?.password;
   const profile = payload?.profile || {};
 
-  if (!userKey || !role || !email || !password) {
-    throw { status: 400, message: 'user_key, role, email and password are required' };
+  if (!role || !email || !password) {
+    throw { status: 400, message: 'role, email and password are required' };
   }
 
   if (!ALLOWED_ROLES.has(role)) {
     throw { status: 400, message: 'Invalid role' };
   }
 
-  if (!isValidUserKey(userKey)) {
+  if (role === 'ADMIN' && actorUser?.is_super_admin !== true) {
     throw {
-      status: 400,
-      message: 'Invalid user_key format. Use 3-40 chars: letters, numbers, _ or -'
+      status: 403,
+      message: 'Only super admin can create admin users',
     };
   }
 
@@ -264,28 +261,68 @@ export const adminRegisterUserService = async (payload) => {
     }
   }
 
+  const generatedUserKey = await generateUniqueUserKey(role, pool, department, yearValue);
+  const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+  const emailVerificationTokenHash = crypto
+    .createHash('sha256')
+    .update(emailVerificationToken)
+    .digest('hex');
+
   const existingUser = await pool.query(
-    'SELECT user_key, email FROM users WHERE user_key = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
-    [userKey, email]
+    'SELECT user_key, email FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
+    [email]
   );
 
   if (existingUser.rowCount > 0) {
     throw { status: 409, message: 'User with same user_key or email already exists' };
   }
 
-  const password_hash = await bcrypt.hash(password, 12);
+  const password_hash = await validateAndHashPassword(password);
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
+
+    if (role === 'ADMIN') {
+      await client.query(
+        `
+          INSERT INTO admin_system_settings_audit_log (actor_user_key, action_type, section_name, before_data, after_data)
+          VALUES ($1, 'create_admin_user_attempt', 'admin_user_registration', NULL, $2::jsonb)
+        `,
+        [
+          actorUser?.user_key || null,
+          JSON.stringify({
+            target_email: email,
+            target_role: role,
+            actor_ip: actorIp || null,
+            timestamp: new Date().toISOString(),
+          }),
+        ]
+      );
+    }
 
     await client.query(
       `
         INSERT INTO users (user_key, role, email, password_hash)
         VALUES ($1, $2, $3, $4)
       `,
-      [userKey, role, email, password_hash]
+      [generatedUserKey, role, email, password_hash]
     );
+
+    await client.query(
+      `
+        UPDATE users
+        SET
+          email_verified = FALSE,
+          email_verify_token = $2,
+          email_verify_token_expires = NOW() + INTERVAL '24 hours'
+        WHERE user_key = $1
+      `,
+      [generatedUserKey, emailVerificationTokenHash]
+    );
+
+    // TODO: Send email with verification link: /api/auth/verify-email?token=<plain_token>
+    console.log('[SECURITY] Email verification pending for user:', generatedUserKey);
 
     if (role === 'STUDENT') {
       await client.query(
@@ -303,7 +340,7 @@ export const adminRegisterUserService = async (payload) => {
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
-          userKey,
+          generatedUserKey,
           fullName,
           email,
           department,
@@ -329,7 +366,7 @@ export const adminRegisterUserService = async (payload) => {
           VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
-          userKey,
+          generatedUserKey,
           fullName,
           email,
           department,
@@ -353,7 +390,7 @@ export const adminRegisterUserService = async (payload) => {
           VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
-          userKey,
+          generatedUserKey,
           fullName,
           email,
           department,
@@ -373,7 +410,7 @@ export const adminRegisterUserService = async (payload) => {
 
   return {
     message: 'User registered successfully',
-    user_key: userKey,
+    user_key: generatedUserKey,
     role
   };
 };
@@ -398,7 +435,7 @@ export const getUserStatisticsService = async () => {
    USER MANAGEMENT: GET ALL STUDENTS
 ========================= */
 export const getAllStudentsService = async (page = 1, limit = 10, search = '') => {
-  const offset = (page - 1) * limit;
+  const { page: safePage, limit: safeLimit, offset } = parsePagination({ page, limit }, { maxLimit: 100 });
   const normalizedSearch = normalizeText(search);
   const searchLike = `%${normalizedSearch}%`;
 
@@ -445,19 +482,19 @@ export const getAllStudentsService = async (page = 1, limit = 10, search = '') =
   `;
 
   try {
-    const result = await pool.query(query, [limit, offset, normalizedSearch, searchLike]);
+    const result = await pool.query(query, [safeLimit, offset, normalizedSearch, searchLike]);
     const countResult = await pool.query(countQuery, [normalizedSearch, searchLike]);
 
     const responseData = {
       students: result.rows,
       total: parseInt(countResult.rows[0].total, 10),
-      page,
-      limit
+      page: safePage,
+      limit: safeLimit
     };
 
     // Log query result for debugging
     await logQueryResult('getAllStudents', {
-      params: { page, limit, offset },
+      params: { page: safePage, limit: safeLimit, offset },
       rowCount: result.rows.length,
       total: responseData.total
     });
@@ -468,14 +505,14 @@ export const getAllStudentsService = async (page = 1, limit = 10, search = '') =
     await logQueryResult('getAllStudents_error', {
       error: error.message,
       stack: error.stack,
-      params: { page, limit, offset }
+      params: { page: safePage, limit: safeLimit, offset }
     });
     throw error;
   }
 };
 
 export const getAllMentorsService = async (page = 1, limit = 10, search = '') => {
-  const offset = (page - 1) * limit;
+  const { page: safePage, limit: safeLimit, offset } = parsePagination({ page, limit }, { maxLimit: 100 });
   const normalizedSearch = normalizeText(search);
   const searchLike = `%${normalizedSearch}%`;
 
@@ -520,19 +557,19 @@ export const getAllMentorsService = async (page = 1, limit = 10, search = '') =>
   `;
 
   try {
-    const result = await pool.query(query, [limit, offset, normalizedSearch, searchLike]);
+    const result = await pool.query(query, [safeLimit, offset, normalizedSearch, searchLike]);
     const countResult = await pool.query(countQuery, [normalizedSearch, searchLike]);
 
     const responseData = {
       mentors: result.rows,
       total: parseInt(countResult.rows[0].total, 10),
-      page,
-      limit
+      page: safePage,
+      limit: safeLimit
     };
 
     // Log query result for debugging
     await logQueryResult('getAllMentors', {
-      params: { page, limit, offset },
+      params: { page: safePage, limit: safeLimit, offset },
       rowCount: result.rows.length,
       total: responseData.total
     });
@@ -543,7 +580,7 @@ export const getAllMentorsService = async (page = 1, limit = 10, search = '') =>
     await logQueryResult('getAllMentors_error', {
       error: error.message,
       stack: error.stack,
-      params: { page, limit, offset }
+      params: { page: safePage, limit: safeLimit, offset }
     });
     throw error;
   }
@@ -553,7 +590,7 @@ export const getAllMentorsService = async (page = 1, limit = 10, search = '') =>
    USER MANAGEMENT: GET ALL USERS
 ========================= */
 export const getAllUsersService = async (page = 1, limit = 10, search = '') => {
-  const offset = (page - 1) * limit;
+  const { page: safePage, limit: safeLimit, offset } = parsePagination({ page, limit }, { maxLimit: 100 });
   const normalizedSearch = normalizeText(search);
   const searchLike = `%${normalizedSearch}%`;
 
@@ -604,14 +641,14 @@ export const getAllUsersService = async (page = 1, limit = 10, search = '') => {
     )
   `;
 
-  const result = await pool.query(query, [limit, offset, normalizedSearch, searchLike]);
+  const result = await pool.query(query, [safeLimit, offset, normalizedSearch, searchLike]);
   const countResult = await pool.query(countQuery, [normalizedSearch, searchLike]);
 
   return {
     users: result.rows,
     total: parseInt(countResult.rows[0].total, 10),
-    page,
-    limit
+    page: safePage,
+    limit: safeLimit
   };
 };
 
