@@ -373,7 +373,7 @@ export default function MentorMeetingsPage() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-slate-200 bg-linear-to-br from-white via-slate-50 to-[#eef3fb] p-4 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-[#eef3fb] p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <h2 className="text-xl font-semibold text-slate-900">Upcoming Meetings</h2>
 

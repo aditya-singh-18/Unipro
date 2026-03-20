@@ -105,7 +105,7 @@ export default function AdminSidebar() {
         h-screen
         ${effectiveCollapsed ? "w-16" : "w-56"}
         shrink-0
-        bg-linear-to-b from-[#1e3a5f] via-[#243b63] to-[#1a2f4a]
+        bg-gradient-to-b from-[#1e3a5f] via-[#243b63] to-[#1a2f4a]
         text-white
         flex
         flex-col
@@ -121,7 +121,7 @@ export default function AdminSidebar() {
         <div className="flex items-center justify-between">
           {!effectiveCollapsed && (
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 bg-linear-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center font-bold text-lg shadow-lg">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center font-bold text-lg shadow-lg">
                 U
               </div>
               <div className="min-w-0">
@@ -167,7 +167,7 @@ export default function AdminSidebar() {
                   duration-200
                   ${
                     active
-                      ? "bg-linear-to-r from-blue-600 to-blue-500 shadow-lg shadow-blue-500/30 scale-[1.02]"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-500 shadow-lg shadow-blue-500/30 scale-[1.02]"
                       : "hover:bg-white/10 hover:translate-x-1"
                   }
                 `}
@@ -253,7 +253,7 @@ export default function AdminSidebar() {
               </button>
               <button
                 onClick={handleConfirmLogout}
-                className="px-4 py-2.5 bg-linear-to-r from-red-600 to-red-700 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-red-500/30 transition-all duration-200"
+                className="px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-red-500/30 transition-all duration-200"
               >
                 Logout
               </button>

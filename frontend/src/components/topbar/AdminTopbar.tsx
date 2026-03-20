@@ -66,7 +66,7 @@ export default function AdminTopbar() {
             onClick={() => setOpen((prev) => !prev)}
             className="cursor-pointer flex items-center gap-2 sm:gap-3 hover:bg-slate-50 px-2 sm:px-3 py-2 rounded-xl transition-all duration-200 min-w-0"
           >
-            <div className="h-10 w-10 rounded-xl bg-linear-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center font-bold uppercase shadow-md">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center font-bold uppercase shadow-md">
               {user?.name?.charAt(0) || "A"}
             </div>
 

@@ -333,7 +333,7 @@ export default function MentorProfilePage() {
   }
 
   return (
-    <main className="min-h-full overflow-x-hidden bg-linear-to-br from-slate-100 via-[#eef3fb] to-slate-100 p-2 sm:p-4 lg:p-6">
+    <main className="min-h-full overflow-x-hidden bg-gradient-to-br from-slate-100 via-[#eef3fb] to-slate-100 p-2 sm:p-4 lg:p-6">
       {duplicateSkillToast && (
         <div className="pointer-events-none fixed left-1/2 top-4 z-50 -translate-x-1/2 px-3 sm:px-4">
           <div className="rounded-full border border-amber-200 bg-white/95 px-4 py-2 text-[11px] font-medium text-amber-700 shadow-lg backdrop-blur sm:text-xs">
@@ -577,7 +577,7 @@ export default function MentorProfilePage() {
                   {skills.map((skill) => (
                     <div
                       key={skill.id}
-                      className="rounded-lg border border-slate-200 bg-linear-to-br from-slate-50 to-white p-2.5 sm:p-3 shadow-sm hover:shadow-md transition-shadow"
+                      className="rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-2.5 sm:p-3 shadow-sm hover:shadow-md transition-shadow"
                     >
                       <div className="flex items-start gap-2 sm:gap-2.5">
                         <div className="rounded-md bg-[#2c4c7c]/10 p-1.5 sm:p-2 text-[#2c4c7c]">

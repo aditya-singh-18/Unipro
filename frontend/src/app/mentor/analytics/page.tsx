@@ -330,7 +330,7 @@ export default function MentorAnalyticsPage() {
                   </div>
                   <div className="h-4 w-full rounded-full bg-slate-100 overflow-hidden border border-slate-200">
                     <div
-                      className="h-full rounded-full bg-linear-to-r from-blue-500 to-emerald-500"
+                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500"
                       style={{ inlineSize: `${completionRate}%` }}
                     />
                   </div>
@@ -409,7 +409,7 @@ export default function MentorAnalyticsPage() {
                       <h3 className="text-lg font-semibold text-slate-900">{selectedProject?.title || "Selected Project"}</h3>
                       <p className="text-sm text-slate-500 mt-1">Completion based on approved vs total tracked weeks</p>
                       <div className="mt-4 h-4 w-full rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full bg-linear-to-r from-blue-500 to-emerald-500" style={{ inlineSize: `${completionRate}%` }} />
+                        <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500" style={{ inlineSize: `${completionRate}%` }} />
                       </div>
                       <p className="mt-3 text-sm text-slate-700">
                         Completed <span className="font-bold text-slate-900">{completionRate}%</span> ({filteredAggregates.approvedWeeks}/{filteredAggregates.totalWeeks} weeks)
@@ -470,7 +470,7 @@ export default function MentorAnalyticsPage() {
                         return (
                           <div
                             key={row.weekNumber}
-                            className="rounded-xl border border-slate-200 bg-linear-to-br from-slate-50 to-white p-5 hover:shadow-md transition-shadow"
+                            className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 hover:shadow-md transition-shadow"
                           >
                             <div className="flex items-center justify-between mb-4">
                               <div>

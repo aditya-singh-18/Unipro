@@ -281,7 +281,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-100 via-blue-50 to-purple-50 flex">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-purple-50 flex">
       {/* FIXED SIDEBAR */}
       <div className="fixed left-0 top-0 h-screen border-r border-slate-200 z-40 shadow-xl">
         <Sidebar
@@ -296,17 +296,17 @@ export default function ProfilePage() {
       >
         <Topbar title="Student Profile" />
 
-        <main className="flex-1 p-6 md:p-8 bg-linear-to-br from-slate-100 via-blue-50 to-purple-50 overflow-y-auto">
+        <main className="flex-1 p-6 md:p-8 bg-gradient-to-br from-slate-100 via-blue-50 to-purple-50 overflow-y-auto">
           <div className="max-w-6xl mx-auto space-y-6">
             {/* OVERVIEW */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* AVATAR & NAME CARD */}
-              <div className="bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl shadow-xl border-2 border-blue-200/60 p-6 md:p-8 flex flex-col items-center text-center gap-4 backdrop-blur-sm hover:shadow-2xl transition-all duration-300">
-                <p className="text-xs font-bold text-indigo-700 bg-linear-to-r from-indigo-100 to-blue-100 px-4 py-1.5 rounded-full border border-indigo-200">My Profile</p>
+              <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl shadow-xl border-2 border-blue-200/60 p-6 md:p-8 flex flex-col items-center text-center gap-4 backdrop-blur-sm hover:shadow-2xl transition-all duration-300">
+                <p className="text-xs font-bold text-indigo-700 bg-gradient-to-r from-indigo-100 to-blue-100 px-4 py-1.5 rounded-full border border-indigo-200">My Profile</p>
 
                 {/* AVATAR */}
                 <div className="relative w-32 h-32 md:w-36 md:h-36 group">
-                  <div className="w-full h-full rounded-full overflow-hidden border-4 border-white shadow-2xl bg-linear-to-br from-blue-400 via-indigo-400 to-purple-400 flex items-center justify-center text-4xl font-bold text-white ring-4 ring-blue-200/50">
+                  <div className="w-full h-full rounded-full overflow-hidden border-4 border-white shadow-2xl bg-gradient-to-br from-blue-400 via-indigo-400 to-purple-400 flex items-center justify-center text-4xl font-bold text-white ring-4 ring-blue-200/50">
                     {avatarPreview || profileImage ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -319,7 +319,7 @@ export default function ProfilePage() {
                     )}
                   </div>
 
-                  <div className="absolute inset-0 rounded-full bg-linear-to-br from-blue-600/80 to-purple-600/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-4 text-white backdrop-blur-sm">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-600/80 to-purple-600/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-4 text-white backdrop-blur-sm">
                     <button onClick={onAvatarClick} aria-label="Upload avatar" className="hover:bg-white/30 p-3 rounded-full transition-all duration-200 hover:scale-110">
                       <Camera size={24} />
                     </button>
@@ -343,19 +343,19 @@ export default function ProfilePage() {
                   <p className="text-xs text-slate-700 font-semibold">
                     {user.department || "N/A"} • Year {user.year || "—"}
                   </p>
-                  <p className="inline-block mt-2 bg-linear-to-r from-green-400 to-emerald-400 text-white text-[11px] font-bold px-4 py-1.5 rounded-full shadow-md">
+                  <p className="inline-block mt-2 bg-gradient-to-r from-green-400 to-emerald-400 text-white text-[11px] font-bold px-4 py-1.5 rounded-full shadow-md">
                     ✓ {user.status || "ACTIVE"}
                   </p>
                 </div>
               </div>
 
               {/* INFO CARD */}
-              <div className="bg-linear-to-br from-white to-slate-50 rounded-2xl shadow-xl border-2 border-slate-200/60 p-6 md:p-8 lg:col-span-2 hover:shadow-2xl transition-all duration-300">
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-xl border-2 border-slate-200/60 p-6 md:p-8 lg:col-span-2 hover:shadow-2xl transition-all duration-300">
                 <div className="space-y-2 mb-6">
                   <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                     <span className="text-2xl">👤</span> Personal Information
                   </h3>
-                  <div className="h-1 w-20 bg-linear-to-r from-indigo-400 via-blue-400 to-purple-400 rounded-full"></div>
+                  <div className="h-1 w-20 bg-gradient-to-r from-indigo-400 via-blue-400 to-purple-400 rounded-full"></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Info label="Enrollment No" value={user.enrollmentId} color="indigo" />
@@ -369,18 +369,18 @@ export default function ProfilePage() {
             </div>
 
             {/* BIO SECTION */}
-            <div className="bg-linear-to-br from-white to-amber-50/30 rounded-2xl shadow-lg border border-amber-200/50 p-6 md:p-8 hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-white to-amber-50/30 rounded-2xl shadow-lg border border-amber-200/50 p-6 md:p-8 hover:shadow-xl transition-all duration-300">
               <div className="flex items-center justify-between mb-6">
                 <div className="space-y-1">
                   <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                     <span className="text-2xl">✨</span> About Me
                   </h3>
-                  <div className="h-1 w-16 bg-linear-to-r from-amber-400 via-orange-400 to-amber-400 rounded-full"></div>
+                  <div className="h-1 w-16 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 rounded-full"></div>
                 </div>
                 {!bioEditMode && (
                   <button
                     onClick={() => setBioEditMode(true)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold border-2 border-amber-300 bg-linear-to-r from-amber-50 to-orange-50 text-amber-700 rounded-xl hover:from-amber-100 hover:to-orange-100 hover:border-amber-400 transition-all duration-300 shadow-sm hover:shadow-md"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 rounded-xl hover:from-amber-100 hover:to-orange-100 hover:border-amber-400 transition-all duration-300 shadow-sm hover:shadow-md"
                   >
                     <Edit size={16} /> Edit Bio
                   </button>
@@ -388,7 +388,7 @@ export default function ProfilePage() {
               </div>
 
               {!bioEditMode ? (
-                <div className="bg-linear-to-br from-amber-50/50 to-orange-50/50 border-2 border-amber-200/60 rounded-xl p-6 min-h-32 backdrop-blur-sm">
+                <div className="bg-gradient-to-br from-amber-50/50 to-orange-50/50 border-2 border-amber-200/60 rounded-xl p-6 min-h-32 backdrop-blur-sm">
                   {bio ? (
                     <p className="text-slate-800 leading-relaxed text-base font-medium">
                       {bio}
@@ -400,7 +400,7 @@ export default function ProfilePage() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-4 bg-linear-to-br from-slate-50 to-amber-50/30 p-6 rounded-xl border-2 border-amber-200/60">
+                <div className="space-y-4 bg-gradient-to-br from-slate-50 to-amber-50/30 p-6 rounded-xl border-2 border-amber-200/60">
                   <div className="space-y-2">
                     <label className="block text-sm font-bold text-slate-700">
                       Write your bio <span className="text-red-500">*</span>
@@ -429,7 +429,7 @@ export default function ProfilePage() {
                       <button
                         onClick={saveBio}
                         disabled={bioSaving || !bioEdit.trim()}
-                        className="bg-linear-to-r from-amber-500 via-orange-500 to-amber-500 text-white px-8 py-2.5 rounded-xl font-bold hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                        className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white px-8 py-2.5 rounded-xl font-bold hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
                       >
                         {bioSaving ? "Saving..." : "💾 Save Bio"}
                       </button>
@@ -440,18 +440,18 @@ export default function ProfilePage() {
             </div>
 
             {/* SOCIAL LINKS */}
-            <div className="bg-linear-to-br from-white to-purple-50/30 rounded-2xl shadow-lg border-2 border-purple-200/50 p-6 md:p-8 hover:shadow-xl transition-all duration-300">
+            <div className="bg-gradient-to-br from-white to-purple-50/30 rounded-2xl shadow-lg border-2 border-purple-200/50 p-6 md:p-8 hover:shadow-xl transition-all duration-300">
               <div className="flex items-center justify-between mb-6">
                 <div className="space-y-1">
                   <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                     <span className="text-2xl">🔗</span> Social Links
                   </h3>
-                  <div className="h-1 w-16 bg-linear-to-r from-purple-400 via-pink-400 to-purple-400 rounded-full"></div>
+                  <div className="h-1 w-16 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 rounded-full"></div>
                 </div>
                 {!editMode && (
                   <button
                     onClick={() => setEditMode(true)}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold border-2 border-purple-300 bg-linear-to-r from-purple-50 to-pink-50 text-purple-700 rounded-xl hover:from-purple-100 hover:to-pink-100 hover:border-purple-400 transition-all duration-300 shadow-sm hover:shadow-md"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 rounded-xl hover:from-purple-100 hover:to-pink-100 hover:border-purple-400 transition-all duration-300 shadow-sm hover:shadow-md"
                   >
                     <Edit size={16} /> Manage
                   </button>
@@ -461,7 +461,7 @@ export default function ProfilePage() {
               {!editMode && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {links.length === 0 ? (
-                    <div className="md:col-span-2 text-center py-16 bg-linear-to-br from-purple-50 to-pink-50 rounded-2xl border-2 border-purple-200/60">
+                    <div className="md:col-span-2 text-center py-16 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border-2 border-purple-200/60">
                       <p className="text-2xl mb-3">🌐</p>
                       <p className="text-slate-600 font-semibold mb-3">No social links added yet</p>
                       <button
@@ -475,10 +475,10 @@ export default function ProfilePage() {
                     links.map((s, i) => (
                       <div
                         key={`${s.platform}-${i}`}
-                        className="border-2 border-purple-200/60 rounded-2xl p-4 flex items-center justify-between bg-linear-to-br from-white to-purple-50/50 hover:shadow-lg hover:border-purple-400 transition-all duration-300 transform hover:scale-105"
+                        className="border-2 border-purple-200/60 rounded-2xl p-4 flex items-center justify-between bg-gradient-to-br from-white to-purple-50/50 hover:shadow-lg hover:border-purple-400 transition-all duration-300 transform hover:scale-105"
                       >
                         <div className="flex items-center gap-3 flex-1">
-                          <div className="p-3 rounded-xl bg-linear-to-br from-purple-100 to-pink-100 border-2 border-purple-200">
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 border-2 border-purple-200">
                             <Icon platform={s.platform} />
                           </div>
                           <div className="min-w-0">
@@ -491,7 +491,7 @@ export default function ProfilePage() {
                           href={s.link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="px-4 py-2 border-2 border-purple-300 rounded-xl text-xs bg-linear-to-r from-purple-50 to-pink-50 text-purple-700 hover:from-purple-100 hover:to-pink-100 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
+                          className="px-4 py-2 border-2 border-purple-300 rounded-xl text-xs bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 hover:from-purple-100 hover:to-pink-100 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
                         >
                           Open →
                         </a>
@@ -502,7 +502,7 @@ export default function ProfilePage() {
               )}
 
               {editMode && (
-                <div className="space-y-4 bg-linear-to-br from-slate-50 to-purple-50/30 p-6 rounded-xl border-2 border-purple-200/60">
+                <div className="space-y-4 bg-gradient-to-br from-slate-50 to-purple-50/30 p-6 rounded-xl border-2 border-purple-200/60">
                   {links.map((s, i) => (
                     <div key={i} className="flex flex-col md:flex-row gap-3 p-4 bg-white rounded-xl border-2 border-purple-200/60 hover:border-purple-300 transition-all duration-200">
                       <select
@@ -557,7 +557,7 @@ export default function ProfilePage() {
                     <button
                       onClick={saveLinks}
                       disabled={saving}
-                      className="bg-linear-to-r from-green-500 via-emerald-500 to-green-500 text-white px-8 py-2.5 rounded-xl text-xs font-bold hover:from-green-600 hover:via-emerald-600 hover:to-green-600 disabled:opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                      className="bg-gradient-to-r from-green-500 via-emerald-500 to-green-500 text-white px-8 py-2.5 rounded-xl text-xs font-bold hover:from-green-600 hover:via-emerald-600 hover:to-green-600 disabled:opacity-50 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
                     >
                       {saving ? "Saving..." : "💾 Save Links"}
                     </button>
@@ -600,7 +600,7 @@ export default function ProfilePage() {
       {/* UNDO SNACKBAR */}
       {showUndo && undoItem && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="bg-linear-to-r from-slate-900 to-slate-800 text-white px-6 py-4 rounded-xl flex items-center gap-4 shadow-2xl border border-slate-700">
+          <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white px-6 py-4 rounded-xl flex items-center gap-4 shadow-2xl border border-slate-700">
             <span className="text-sm font-medium">
               {undoItem.platform} link deleted
             </span>

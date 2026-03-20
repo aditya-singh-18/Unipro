@@ -215,7 +215,7 @@ export default function ProjectDetailPage() {
   const formattedDesc = formatDescription(proj.description)
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-linear-to-br from-slate-100 to-slate-200">
+    <div className="h-screen w-screen flex overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
       {/* ✅ SINGLE SIDEBAR */}
       <Sidebar />
 
@@ -238,7 +238,7 @@ export default function ProjectDetailPage() {
               {proj.status === 'REJECTED' && (
                 <button
                   onClick={() => setResubmitModalOpen(true)}
-                  className="rounded-lg bg-linear-to-r from-orange-500 to-orange-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-orange-600 hover:to-orange-700"
+                  className="rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-orange-600 hover:to-orange-700"
                 >
                   🔄 Resubmit Project
                 </button>
@@ -248,7 +248,7 @@ export default function ProjectDetailPage() {
               {proj.status !== 'APPROVED' && proj.status !== 'REJECTED' && (
                 <button
                   onClick={() => router.push(`/student/my-project/${projectId}/edit`)}
-                  className="rounded-lg bg-linear-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-blue-600 hover:to-blue-700"
+                  className="rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:from-blue-600 hover:to-blue-700"
                 >
                   ✏️ Edit Project
                 </button>
@@ -261,7 +261,7 @@ export default function ProjectDetailPage() {
             {/* LEFT COLUMN - Project Details */}
             <div className="space-y-4 lg:col-span-2">
               {/* PROJECT TITLE CARD */}
-              <div className="rounded-2xl border-2 border-slate-300 bg-linear-to-br from-slate-50 to-slate-100 p-5 shadow-lg md:p-7">
+              <div className="rounded-2xl border-2 border-slate-300 bg-gradient-to-br from-slate-50 to-slate-100 p-5 shadow-lg md:p-7">
                 {/* Project ID and Status */}
                 <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
@@ -355,7 +355,7 @@ export default function ProjectDetailPage() {
               )}
 
               {/* TECH STACK & TRACK CARD */}
-              <div className="space-y-5 rounded-2xl border-2 border-purple-200 bg-linear-to-br from-purple-50 to-pink-50 p-5 shadow-lg md:p-6">
+              <div className="space-y-5 rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-5 shadow-lg md:p-6">
                 {/* Tech Stack */}
                 <div>
                   <div className="mb-3 flex items-center gap-3">
@@ -383,7 +383,7 @@ export default function ProjectDetailPage() {
 
               {/* MENTOR FEEDBACK CARD */}
               {proj.mentor_feedback && (
-                <div className="rounded-2xl border-2 border-blue-200 bg-linear-to-br from-blue-50 to-indigo-50 p-5 shadow-lg md:p-6">
+                <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 shadow-lg md:p-6">
                   <h2 className="mb-3 text-xl font-bold text-blue-900">💬 Mentor Feedback</h2>
                   <p className="text-sm leading-6 text-slate-700 md:text-[15px]">{proj.mentor_feedback}</p>
                 </div>
@@ -393,7 +393,7 @@ export default function ProjectDetailPage() {
             {/* RIGHT COLUMN - Team & Timeline */}
             <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
               {/* TEAM INFO CARD */}
-              <div className="rounded-2xl border-2 border-indigo-200 bg-linear-to-br from-indigo-50 to-blue-50 p-4 shadow-lg md:p-5">
+              <div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50 p-4 shadow-lg md:p-5">
                 <div className="mb-3 flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-200 text-base">
                     👥
@@ -448,13 +448,13 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {/* View Progress Button */}
-                <button className="mt-3 w-full rounded-lg bg-linear-to-r from-blue-600 to-blue-700 px-4 py-2 text-xs font-semibold text-white transition-all hover:from-blue-700 hover:to-blue-800">
+                <button className="mt-3 w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-xs font-semibold text-white transition-all hover:from-blue-700 hover:to-blue-800">
                   View Progress
                 </button>
               </div>
 
               {/* TIMELINE CARD */}
-              <div className="rounded-2xl border-2 border-amber-200 bg-linear-to-br from-amber-50 to-orange-50 p-5 shadow-lg md:p-6">
+              <div className="rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5 shadow-lg md:p-6">
                 <div className="mb-5 flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-200 text-lg">
                     📅

@@ -545,7 +545,7 @@ export default function TeamDashboard() {
                 </h2>
               </div>
 
-              <div className="rounded-2xl bg-linear-to-br from-indigo-100 to-blue-100 p-4 shrink-0">
+              <div className="rounded-2xl bg-gradient-to-br from-indigo-100 to-blue-100 p-4 shrink-0">
                 <Users className="text-indigo-600" size={32} />
               </div>
             </div>
@@ -1072,7 +1072,7 @@ export default function TeamDashboard() {
                     setTeamEditMode(false);
                   }
                 }}
-                className={`card-tile bg-linear-to-r ${card.className} text-left ${activePanel === card.key ? "ring-4 ring-white/60" : ""}`}
+                className={`card-tile bg-gradient-to-r ${card.className} text-left ${activePanel === card.key ? "ring-4 ring-white/60" : ""}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>

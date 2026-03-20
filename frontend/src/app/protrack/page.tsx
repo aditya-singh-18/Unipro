@@ -62,7 +62,7 @@ export default function ProTrackPage() {
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
           {/* Header Section */}
-          <section className="rounded-3xl border border-sky-100/80 bg-linear-to-br from-white via-sky-50/40 to-blue-100/30 p-4 md:p-5 shadow-[0_14px_34px_rgba(44,78,130,0.12)]">
+          <section className="rounded-3xl border border-sky-100/80 bg-gradient-to-br from-white via-sky-50/40 to-blue-100/30 p-4 md:p-5 shadow-[0_14px_34px_rgba(44,78,130,0.12)]">
             <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
               <div>
                 <h2 className="text-xl font-bold text-slate-900 tracking-tight">

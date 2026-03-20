@@ -114,7 +114,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-[#2c3e73] to-[#1f2b4d]">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#2c3e73] to-[#1f2b4d]">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-8">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-[#2c3e73] flex items-center justify-center gap-2">

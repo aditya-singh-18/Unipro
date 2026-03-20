@@ -140,7 +140,7 @@ export default function ResubmitProjectModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
         {/* HEADER */}
-        <div className="sticky top-0 bg-linear-to-r from-orange-600 to-orange-700 px-8 py-6 flex items-center justify-between border-b">
+        <div className="sticky top-0 bg-gradient-to-r from-orange-600 to-orange-700 px-8 py-6 flex items-center justify-between border-b">
           <div>
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
               <RefreshCw size={28} />

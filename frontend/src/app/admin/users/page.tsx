@@ -353,7 +353,7 @@ export default function UserManagementPage() {
         ].map((c) => (
           <div
             key={c.label}
-            className={`cursor-default rounded-2xl p-5 text-white bg-linear-to-r ${c.g} category-hover truncate shadow-md`}
+            className={`cursor-default rounded-2xl p-5 text-white bg-gradient-to-r ${c.g} category-hover truncate shadow-md`}
           >
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-semibold opacity-90 truncate">{c.label}</p>
@@ -379,7 +379,7 @@ export default function UserManagementPage() {
 
           <button
             onClick={() => setRegistrationModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-linear-to-r from-blue-500 to-blue-700 text-white rounded-xl font-semibold category-hover shadow-lg"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-xl font-semibold category-hover shadow-lg"
           >
             <Plus size={20} />
             Add User

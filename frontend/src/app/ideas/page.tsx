@@ -165,7 +165,7 @@ export default function ProjectIdeasPage() {
         <Topbar title="Project Ideas" />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-6">
-          <section className="relative overflow-hidden rounded-3xl border border-blue-100 bg-linear-to-br from-[#f8fbff] via-[#e9f1ff] to-[#f1f7ff] p-6 md:p-8 shadow-[0_18px_50px_rgba(55,94,161,0.15)]">
+          <section className="relative overflow-hidden rounded-3xl border border-blue-100 bg-gradient-to-br from-[#f8fbff] via-[#e9f1ff] to-[#f1f7ff] p-6 md:p-8 shadow-[0_18px_50px_rgba(55,94,161,0.15)]">
             <div className="absolute -right-14 -top-16 h-44 w-44 rounded-full bg-blue-300/25 blur-2xl" />
             <div className="absolute -left-12 -bottom-14 h-48 w-48 rounded-full bg-cyan-300/25 blur-2xl" />
 

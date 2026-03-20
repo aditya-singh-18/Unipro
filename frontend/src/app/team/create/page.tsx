@@ -89,7 +89,7 @@ export default function CreateTeamPage() {
   };
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-linear-to-br from-slate-200 to-blue-200 text-[#1f2a44]">
+    <div className="h-screen w-screen flex overflow-hidden bg-gradient-to-br from-slate-200 to-blue-200 text-[#1f2a44]">
       <Sidebar />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">

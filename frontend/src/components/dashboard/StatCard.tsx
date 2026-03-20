@@ -28,7 +28,7 @@ export default function StatCard({
         flex-col
         text-white
         overflow-hidden
-        bg-linear-to-r ${bg}
+        bg-gradient-to-r ${bg}
         category-hover
         active:scale-[0.98]
       `}

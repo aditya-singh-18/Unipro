@@ -290,7 +290,7 @@ export default function AdminDashboardPage() {
             <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 lg:p-6 min-w-0">
               <div className="flex items-center justify-between mb-4 gap-2 min-w-0">
                 <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">Pending Project Approvals</h2>
-                <span className="px-3 sm:px-4 py-1 bg-linear-to-r from-yellow-100 to-amber-100 text-yellow-800 rounded-full text-xs sm:text-sm font-semibold shadow-sm whitespace-nowrap">
+                <span className="px-3 sm:px-4 py-1 bg-gradient-to-r from-yellow-100 to-amber-100 text-yellow-800 rounded-full text-xs sm:text-sm font-semibold shadow-sm whitespace-nowrap">
                   {stats.pendingApprovals} Pending
                 </span>
               </div>
@@ -305,7 +305,7 @@ export default function AdminDashboardPage() {
                   {pendingProjects.slice(0, 5).map((project) => (
                     <div
                       key={project.project_id}
-                      className="group border border-slate-200 rounded-xl p-4 sm:p-6 hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-linear-to-r from-white to-slate-50/50 min-w-0"
+                      className="group border border-slate-200 rounded-xl p-4 sm:p-6 hover:border-blue-300 hover:shadow-md transition-all duration-200 bg-gradient-to-r from-white to-slate-50/50 min-w-0"
                     >
                       <div className="flex flex-col sm:flex-row items-start justify-between gap-3 min-w-0">
                         <div className="flex-1 min-w-0">
@@ -327,7 +327,7 @@ export default function AdminDashboardPage() {
                         <div className="flex flex-col gap-2 sm:ml-4 shrink-0 w-full sm:w-auto">
                           <button 
                             onClick={() => handleReviewClick(project)}
-                            className="w-full sm:w-auto px-5 sm:px-6 py-2.5 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all duration-200 hover:scale-105"
+                            className="w-full sm:w-auto px-5 sm:px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all duration-200 hover:scale-105"
                           >
                             Review
                           </button>
@@ -577,7 +577,7 @@ function StatCard({ title, value, icon, color, trend, onClick }: StatCardProps) 
       onClick={onClick}
       className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 relative overflow-hidden hover:shadow-xl transition-all duration-300 group min-w-0 cursor-pointer"
     >
-      <div className={`absolute top-0 right-0 w-32 h-32 bg-linear-to-br ${colorClasses[color]} opacity-5 rounded-bl-full group-hover:opacity-10 transition-opacity`}></div>
+      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorClasses[color]} opacity-5 rounded-bl-full group-hover:opacity-10 transition-opacity`}></div>
       
       <div className="relative">
         <div className="flex items-center justify-between mb-3 gap-3 min-w-0">
@@ -631,7 +631,7 @@ function ComplianceBoardRow({ item, onOpen }: { item: AdminComplianceItem; onOpe
       : "Monitor routinely";
 
   return (
-    <div className="rounded-2xl border border-slate-200 p-4 sm:p-5 hover:border-slate-300 hover:shadow-md transition-all duration-200 bg-linear-to-r from-white to-slate-50/40">
+    <div className="rounded-2xl border border-slate-200 p-4 sm:p-5 hover:border-slate-300 hover:shadow-md transition-all duration-200 bg-gradient-to-r from-white to-slate-50/40">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

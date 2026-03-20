@@ -266,7 +266,7 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-linear-to-r from-slate-100 via-white to-cyan-50 p-6 shadow-sm">
+      <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-100 via-white to-cyan-50 p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">System Settings</h1>

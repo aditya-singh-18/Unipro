@@ -68,7 +68,7 @@ function AppPreviewCard() {
         </div>
         <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
           <div
-            className="h-full rounded-full bg-linear-to-r from-blue-500 to-violet-500 transition-all duration-1000"
+            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-1000"
             style={{ width: "72%" }}
           />
         </div>
@@ -180,7 +180,7 @@ export default function LandingPage() {
         </header>
 
         {/* ══════════════════════ HERO ══════════════════════ */}
-        <section className="relative bg-linear-to-br from-slate-950 via-blue-950 to-slate-900 text-white overflow-hidden">
+        <section className="relative bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white overflow-hidden">
           {/* Background glow */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute top-[-20%] left-[30%] w-150 h-150 bg-blue-600/20 rounded-full blur-3xl" />
@@ -198,7 +198,7 @@ export default function LandingPage() {
               <h1 className="text-5xl xl:text-6xl font-extrabold leading-tight tracking-tight">
                 Smart University
                 <br />
-                <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-violet-400">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-violet-400">
                   Project Management
                 </span>
                 <br />
@@ -306,7 +306,7 @@ export default function LandingPage() {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
               {/* Connector line (desktop) */}
-              <div className="hidden lg:block absolute top-12 left-[12.5%] right-[12.5%] h-0.5 bg-linear-to-r from-blue-200 via-violet-200 to-emerald-200 z-0" />
+              <div className="hidden lg:block absolute top-12 left-[12.5%] right-[12.5%] h-0.5 bg-gradient-to-r from-blue-200 via-violet-200 to-emerald-200 z-0" />
 
               {[
                 { step: "01", icon: GraduationCap, title: "Student Creates Project", desc: "Student submits a project proposal with title, description, and team members.", color: "bg-blue-600 text-white" },
@@ -425,7 +425,7 @@ export default function LandingPage() {
 
               {/* Right side visual */}
               <div className="relative">
-                <div className="bg-linear-to-br from-blue-600 to-violet-700 rounded-3xl p-8 text-white shadow-2xl shadow-blue-200">
+                <div className="bg-gradient-to-br from-blue-600 to-violet-700 rounded-3xl p-8 text-white shadow-2xl shadow-blue-200">
                   <div className="text-sm font-semibold opacity-70 mb-6 uppercase tracking-widest">Live Statistics</div>
                   {[
                     { label: "Student Satisfaction", pct: 96 },
@@ -463,7 +463,7 @@ export default function LandingPage() {
         </section>
 
         {/* ══════════════════════ CTA ══════════════════════ */}
-        <section className="bg-linear-to-r from-blue-600 via-blue-700 to-violet-700 py-24">
+        <section className="bg-gradient-to-r from-blue-600 via-blue-700 to-violet-700 py-24">
           <div className="max-w-4xl mx-auto px-6 text-center text-white">
             <h2 className="text-4xl xl:text-5xl font-extrabold mb-6 leading-tight">
               Start Managing Your Academic

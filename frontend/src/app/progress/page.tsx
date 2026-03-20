@@ -522,7 +522,7 @@ export default function ProgressPage() {
         <Topbar title="Student Tracker" />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 tracker-progress-shell">
-          <section className="rounded-3xl border border-sky-100/80 bg-linear-to-br from-white via-sky-50/40 to-blue-100/30 p-4 md:p-5 shadow-[0_14px_34px_rgba(44,78,130,0.12)]">
+          <section className="rounded-3xl border border-sky-100/80 bg-gradient-to-br from-white via-sky-50/40 to-blue-100/30 p-4 md:p-5 shadow-[0_14px_34px_rgba(44,78,130,0.12)]">
             <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
               <div className="w-full md:w-auto">
                 <h2 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Project Tracker</h2>
@@ -1275,7 +1275,7 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/70 bg-white/90 p-4 shadow-[0_10px_20px_rgba(47,83,138,0.13)]">
-      <div className={`absolute inset-x-0 top-0 h-1.5 bg-linear-to-r ${palette[label] || "from-sky-500 to-blue-600"}`} />
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${palette[label] || "from-sky-500 to-blue-600"}`} />
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
     </div>
