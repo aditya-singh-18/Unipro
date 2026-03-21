@@ -53,6 +53,26 @@ import {
   getEscalationDetailService,
   updateEscalationFollowUpService,
 } from '../services/escalationFollowUp.service.js';
+import {
+  createDailyLogEntryService,
+  getDailyLogsService,
+  getTodayDailyLogService,
+  getDailyLogSummaryService,
+  getMyScoresService,
+  getProjectScoresService,
+  recalculateProjectScoreService,
+  createMentorFeedbackService,
+  getMyMentorFeedbackService,
+  replyToMentorFeedbackService,
+  markMentorFeedbackReadService,
+  ingestGithubWebhookService,
+  getProjectGithubCommitsService,
+  updateProjectGithubConfigService,
+  updateUserGithubUsernameService,
+  getMyGithubIdentityService,
+  createGithubOAuthStartUrlService,
+  completeGithubOAuthCallbackService,
+} from '../services/protrackEnhancement.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -1111,5 +1131,327 @@ export const updateEscalationFollowUp = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+export const createDailyLogEntry = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const result = await createDailyLogEntryService({
+      projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+      payload: req.body,
+    });
+
+    return res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getDailyLogs = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const logs = await getDailyLogsService({
+      projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, logs });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getTodayDailyLog = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const result = await getTodayDailyLogService({
+      projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getDailyLogSummary = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const summary = await getDailyLogSummaryService({
+      projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, summary });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getMyScores = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const scores = await getMyScoresService({
+      projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, scores });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getProjectScores = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const scores = await getProjectScoresService({
+      projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, scores });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const recalculateProjectScore = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const score = await recalculateProjectScoreService({
+      projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+      studentUserKey: req.body?.student_user_key,
+    });
+
+    return res.status(200).json({ success: true, score });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const createMentorFeedback = async (req, res) => {
+  try {
+    const feedback = await createMentorFeedbackService({
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+      payload: req.body,
+    });
+
+    return res.status(201).json({ success: true, feedback });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getMyMentorFeedback = async (req, res) => {
+  try {
+    const feedback = await getMyMentorFeedbackService({
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, feedback });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const replyToMentorFeedback = async (req, res) => {
+  try {
+    const updated = await replyToMentorFeedbackService({
+      feedbackId: req.params.id,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+      reply: req.body?.student_reply,
+    });
+
+    return res.status(200).json({ success: true, feedback: updated });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const markMentorFeedbackRead = async (req, res) => {
+  try {
+    const updated = await markMentorFeedbackReadService({
+      feedbackId: req.params.id,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, feedback: updated });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const ingestGithubWebhook = async (req, res) => {
+  try {
+    const result = await ingestGithubWebhookService({
+      projectId: req.params.projectId,
+      payload: req.body,
+      rawBody: req.rawBody,
+      signatureHeader: req.headers['x-hub-signature-256'],
+      githubEvent: req.headers['x-github-event'],
+    });
+
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getProjectGithubCommits = async (req, res) => {
+  try {
+    const commits = await getProjectGithubCommitsService({
+      projectId: req.params.projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, commits });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const updateProjectGithubConfig = async (req, res) => {
+  try {
+    const config = await updateProjectGithubConfigService({
+      projectId: req.params.projectId,
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+      payload: req.body,
+    });
+
+    return res.status(200).json({ success: true, config });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const updateUserGithubUsername = async (req, res) => {
+  try {
+    const user = await updateUserGithubUsernameService({
+      targetUserKey: req.params.userKey,
+      githubUsername: req.body?.github_username,
+      actorRole: req.user.role,
+    });
+
+    return res.status(200).json({ success: true, user });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getMyGithubIdentity = async (req, res) => {
+  try {
+    const user = await getMyGithubIdentityService({
+      actorUserKey: req.user.user_key,
+    });
+
+    return res.status(200).json({ success: true, user });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const startGithubOAuth = async (req, res) => {
+  try {
+    const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const payload = await createGithubOAuthStartUrlService({
+      actorUserKey: req.user.user_key,
+      actorRole: req.user.role,
+      apiBaseUrl,
+    });
+
+    return res.status(200).json({ success: true, ...payload });
+  } catch (error) {
+    return res.status(resolveTrackerStatusCode(error, 400)).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const completeGithubOAuthCallback = async (req, res) => {
+  const frontendBaseUrl = String(process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const redirectUrl = new URL(`${frontendBaseUrl}/progress`);
+
+  try {
+    const apiBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const linked = await completeGithubOAuthCallbackService({
+      code: req.query?.code,
+      state: req.query?.state,
+      apiBaseUrl,
+    });
+
+    redirectUrl.searchParams.set('github_linked', 'success');
+    redirectUrl.searchParams.set('github_username', String(linked.github_username || ''));
+    return res.redirect(302, redirectUrl.toString());
+  } catch (error) {
+    redirectUrl.searchParams.set('github_linked', 'failed');
+    redirectUrl.searchParams.set('reason', String(error?.message || 'OAuth failed'));
+    return res.redirect(302, redirectUrl.toString());
   }
 };

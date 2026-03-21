@@ -1009,3 +1009,289 @@ export const updateProjectTaskStatus = async (
   const res = await axios.patch(`/tracker/tasks/${taskId}/status`, { status });
   return res.data?.task;
 };
+
+export type DailyLogTag = 'progress' | 'done' | 'fix' | 'review' | 'blocker' | 'meeting';
+
+export type DailyLog = {
+  log_id: string;
+  student_user_key: string;
+  project_id: string;
+  task_id: number | null;
+  week_id: number | null;
+  log_date: string;
+  what_i_did: string;
+  what_i_will_do: string;
+  blockers: string | null;
+  tag: DailyLogTag;
+  commit_count: number;
+  commit_link: string | null;
+  hours_spent: number | null;
+  is_late: boolean;
+  ai_summary: string | null;
+  created_at: string;
+};
+
+export type ProgressScore = {
+  score_id: string;
+  student_user_key: string;
+  project_id: string;
+  week_number: number;
+  git_score: number;
+  task_score: number;
+  submission_score: number;
+  log_score: number;
+  total_score: number;
+  progress_pct: number;
+  streak_days: number;
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  days_since_commit: number;
+  overdue_task_count: number;
+  calculated_at: string;
+};
+
+export type MentorFeedback = {
+  feedback_id: string;
+  mentor_employee_id: string;
+  student_user_key: string;
+  project_id: string;
+  reference_type: 'submission' | 'task' | 'general';
+  reference_id: string | null;
+  message: string;
+  rating: number | null;
+  is_read: boolean;
+  student_reply: string | null;
+  created_at: string;
+  mentor_name?: string | null;
+};
+
+export type GithubCommit = {
+  commit_id: string;
+  student_user_key: string;
+  project_id: string;
+  sha: string;
+  message: string | null;
+  committed_at: string;
+  branch: string | null;
+  additions: number;
+  deletions: number;
+  is_merge_commit: boolean;
+  created_at: string;
+  student_name?: string | null;
+};
+
+export type GithubIdentity = {
+  user_key: string;
+  github_username: string | null;
+};
+
+export type CreateDailyLogPayload = {
+  task_id?: number;
+  week_id?: number;
+  what_i_did: string;
+  what_i_will_do: string;
+  blockers?: string;
+  tag?: DailyLogTag;
+  commit_count?: number;
+  commit_link?: string;
+  hours_spent?: number;
+};
+
+export const createDailyLog = async (
+  projectId: string,
+  payload: CreateDailyLogPayload
+): Promise<{ log: DailyLog; score: ProgressScore }> => {
+  const res = await axios.post(`/tracker/projects/${projectId}/daily-logs`, payload);
+  return {
+    log: res.data?.log,
+    score: res.data?.score,
+  };
+};
+
+export const getProjectDailyLogs = async (projectId: string): Promise<DailyLog[]> => {
+  const res = await axios.get(`/tracker/projects/${projectId}/daily-logs`);
+  return res.data?.logs || [];
+};
+
+export const getTodayDailyLog = async (
+  projectId: string
+): Promise<{ submitted: boolean; log: DailyLog | null }> => {
+  const res = await axios.get(`/tracker/projects/${projectId}/daily-logs/today`);
+  return {
+    submitted: Boolean(res.data?.submitted),
+    log: res.data?.log || null,
+  };
+};
+
+export const getProjectDailyLogSummary = async (
+  projectId: string
+): Promise<Array<{ student_user_key: string; submitted_today: boolean }>> => {
+  const res = await axios.get(`/tracker/projects/${projectId}/daily-logs/summary`);
+  return res.data?.summary || [];
+};
+
+export const getMyProjectScores = async (projectId: string): Promise<ProgressScore[]> => {
+  const res = await axios.get(`/tracker/projects/${projectId}/scores/my`);
+  return res.data?.scores || [];
+};
+
+export const getProjectScores = async (projectId: string): Promise<ProgressScore[]> => {
+  const res = await axios.get(`/tracker/projects/${projectId}/scores`);
+  return res.data?.scores || [];
+};
+
+export const recalculateProjectScore = async (
+  projectId: string,
+  studentUserKey: string
+): Promise<ProgressScore> => {
+  const res = await axios.post(`/tracker/projects/${projectId}/scores/recalculate`, {
+    student_user_key: studentUserKey,
+  });
+  return res.data?.score;
+};
+
+export const createMentorFeedback = async (payload: {
+  student_user_key: string;
+  project_id: string;
+  reference_type?: 'submission' | 'task' | 'general';
+  reference_id?: string;
+  message: string;
+  rating?: number;
+}): Promise<MentorFeedback> => {
+  const res = await axios.post('/tracker/feedback', payload);
+  return res.data?.feedback;
+};
+
+export const getMyMentorFeedback = async (): Promise<MentorFeedback[]> => {
+  const res = await axios.get('/tracker/feedback/my');
+  return res.data?.feedback || [];
+};
+
+export const replyToMentorFeedback = async (
+  feedbackId: string,
+  studentReply: string
+): Promise<MentorFeedback> => {
+  const res = await axios.patch(`/tracker/feedback/${feedbackId}/reply`, {
+    student_reply: studentReply,
+  });
+  return res.data?.feedback;
+};
+
+export const markMentorFeedbackRead = async (feedbackId: string): Promise<MentorFeedback> => {
+  const res = await axios.patch(`/tracker/feedback/${feedbackId}/read`);
+  return res.data?.feedback;
+};
+
+export const getProjectGithubCommits = async (projectId: string): Promise<GithubCommit[]> => {
+  const res = await axios.get(`/tracker/projects/${projectId}/github/commits`);
+  return res.data?.commits || [];
+};
+
+const toHex = (bytes: Uint8Array): string =>
+  Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+
+const buildGithubSignature = async (
+  payload: unknown,
+  webhookSecret?: string
+): Promise<string | undefined> => {
+  const secret = String(webhookSecret || '').trim();
+  if (!secret) return undefined;
+
+  if (!globalThis.crypto?.subtle) return undefined;
+
+  const body = JSON.stringify(payload ?? {});
+  const encoder = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await globalThis.crypto.subtle.sign('HMAC', key, encoder.encode(body));
+  return `sha256=${toHex(new Uint8Array(signature))}`;
+};
+
+export const sendGithubWebhookPayload = async (
+  projectId: string,
+  payload: unknown,
+  webhookSecret?: string
+): Promise<{
+  accepted: boolean;
+  ignored: boolean;
+  reason?: string;
+  summary: {
+    totalCommits: number;
+    storedCommits: number;
+    skippedUnknownUsers: number;
+    recalculatedFor: number;
+  };
+}> => {
+  const signature = await buildGithubSignature(payload, webhookSecret);
+  const headers: Record<string, string> = {
+    'x-github-event': 'push',
+  };
+  if (signature) {
+    headers['x-hub-signature-256'] = signature;
+  }
+
+  const res = await axios.post(`/tracker/projects/${projectId}/github/webhook`, payload, {
+    headers,
+  });
+  return {
+    accepted: Boolean(res.data?.accepted),
+    ignored: Boolean(res.data?.ignored),
+    reason: res.data?.reason,
+    summary: res.data?.summary || {
+      totalCommits: 0,
+      storedCommits: 0,
+      skippedUnknownUsers: 0,
+      recalculatedFor: 0,
+    },
+  };
+};
+
+export const updateProjectGithubConfig = async (
+  projectId: string,
+  payload: { github_repo_url?: string; github_webhook_secret?: string }
+): Promise<{
+  project_id: string;
+  github_repo_url: string | null;
+  github_webhook_secret_set: boolean;
+  updated_by: string;
+}> => {
+  const res = await axios.patch(`/tracker/projects/${projectId}/github/config`, payload);
+  return res.data?.config;
+};
+
+export const updateUserGithubUsername = async (
+  userKey: string,
+  githubUsername: string
+): Promise<{
+  user_key: string;
+  role: string;
+  email: string;
+  github_username: string | null;
+}> => {
+  const res = await axios.patch(`/tracker/users/${userKey}/github-username`, {
+    github_username: githubUsername,
+  });
+  return res.data?.user;
+};
+
+export const getMyGithubIdentity = async (): Promise<GithubIdentity> => {
+  const res = await axios.get('/tracker/github/me');
+  return res.data?.user;
+};
+
+export const getGithubOAuthStartUrl = async (): Promise<{
+  authorize_url: string;
+  expires_in_sec: number;
+}> => {
+  const res = await axios.get('/tracker/github/oauth/start');
+  return {
+    authorize_url: String(res.data?.authorize_url || ''),
+    expires_in_sec: Number(res.data?.expires_in_sec || 0),
+  };
+};

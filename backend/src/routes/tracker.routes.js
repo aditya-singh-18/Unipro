@@ -47,6 +47,24 @@ import {
   getEscalationDetail,
   updateEscalationFollowUp,
   uploadSubmissionFile,
+  createDailyLogEntry,
+  getDailyLogs,
+  getTodayDailyLog,
+  getDailyLogSummary,
+  getMyScores,
+  getProjectScores,
+  recalculateProjectScore,
+  createMentorFeedback,
+  getMyMentorFeedback,
+  replyToMentorFeedback,
+  markMentorFeedbackRead,
+  ingestGithubWebhook,
+  getProjectGithubCommits,
+  updateProjectGithubConfig,
+  updateUserGithubUsername,
+  getMyGithubIdentity,
+  startGithubOAuth,
+  completeGithubOAuthCallback,
 } from '../controllers/tracker.controller.js';
 
 const router = express.Router();
@@ -207,6 +225,125 @@ router.get(
   authenticate,
   allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
   getProjectTimeline
+);
+
+router.post(
+  '/projects/:projectId/daily-logs',
+  authenticate,
+  allowRoles('STUDENT'),
+  createDailyLogEntry
+);
+
+router.get(
+  '/projects/:projectId/daily-logs',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  getDailyLogs
+);
+
+router.post(
+  '/projects/:projectId/github/webhook',
+  ingestGithubWebhook
+);
+
+router.get(
+  '/projects/:projectId/github/commits',
+  authenticate,
+  allowRoles('STUDENT', 'MENTOR', 'ADMIN'),
+  getProjectGithubCommits
+);
+
+router.patch(
+  '/projects/:projectId/github/config',
+  authenticate,
+  allowRoles('ADMIN'),
+  updateProjectGithubConfig
+);
+
+router.patch(
+  '/users/:userKey/github-username',
+  authenticate,
+  allowRoles('ADMIN'),
+  updateUserGithubUsername
+);
+
+router.get(
+  '/github/me',
+  authenticate,
+  allowRoles('STUDENT'),
+  getMyGithubIdentity
+);
+
+router.get(
+  '/github/oauth/start',
+  authenticate,
+  allowRoles('STUDENT'),
+  startGithubOAuth
+);
+
+router.get('/github/oauth/callback', completeGithubOAuthCallback);
+
+router.get(
+  '/projects/:projectId/daily-logs/today',
+  authenticate,
+  allowRoles('STUDENT'),
+  getTodayDailyLog
+);
+
+router.get(
+  '/projects/:projectId/daily-logs/summary',
+  authenticate,
+  allowRoles('MENTOR', 'ADMIN'),
+  getDailyLogSummary
+);
+
+router.get(
+  '/projects/:projectId/scores/my',
+  authenticate,
+  allowRoles('STUDENT'),
+  getMyScores
+);
+
+router.get(
+  '/projects/:projectId/scores',
+  authenticate,
+  allowRoles('MENTOR', 'ADMIN'),
+  getProjectScores
+);
+
+router.post(
+  '/projects/:projectId/scores/recalculate',
+  authenticate,
+  allowRoles('MENTOR', 'ADMIN'),
+  recalculateProjectScore
+);
+
+router.post(
+  '/feedback',
+  authenticate,
+  allowRoles('MENTOR', 'ADMIN'),
+  createMentorFeedback
+);
+
+router.get(
+  '/feedback/my',
+  authenticate,
+  allowRoles('STUDENT'),
+  getMyMentorFeedback
+);
+
+router.patch(
+  '/feedback/:id/reply',
+  authenticate,
+  allowRoles('STUDENT'),
+  replyToMentorFeedback
+);
+
+router.patch(
+  '/feedback/:id/read',
+  authenticate,
+  allowRoles('STUDENT'),
+  markMentorFeedbackRead
 );
 
 router.get(

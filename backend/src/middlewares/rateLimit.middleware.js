@@ -1,4 +1,127 @@
 import rateLimit from 'express-rate-limit';
+import { getAdminSystemSettingsService } from '../services/systemSettings.service.js';
+
+const toPositiveInteger = (value, fallback) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+};
+
+const getAuthIdentity = (req) => {
+  const raw = req?.body || {};
+  const candidate =
+    raw.user_key ||
+    raw.employee_id ||
+    raw.email ||
+    raw.username ||
+    '';
+
+  return String(candidate).trim().toLowerCase() || 'unknown-user';
+};
+
+const normalizeRole = (value) => {
+  const role = String(value || '').trim().toUpperCase();
+  if (role === 'STUDENT') return 'STUDENT';
+  if (role === 'MENTOR') return 'MENTOR';
+  if (role === 'ADMIN') return 'ADMIN';
+  return 'MENTOR';
+};
+
+const limiterByPolicyKey = new Map();
+let authRatePolicyCache = null;
+let authRatePolicyCacheExpiresAt = 0;
+
+const getDefaultRolePolicy = (role) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (role === 'STUDENT') {
+    return {
+      max: isProduction ? 20 : 80,
+      windowMs: 15 * 60 * 1000,
+    };
+  }
+
+  if (role === 'ADMIN') {
+    return {
+      max: isProduction ? 8 : 50,
+      windowMs: 15 * 60 * 1000,
+    };
+  }
+
+  return {
+    max: isProduction ? 12 : 60,
+    windowMs: 15 * 60 * 1000,
+  };
+};
+
+const getAuthRatePolicy = async () => {
+  const now = Date.now();
+  if (authRatePolicyCache && now < authRatePolicyCacheExpiresAt) {
+    return authRatePolicyCache;
+  }
+
+  const defaults = {
+    enabled: true,
+    STUDENT: getDefaultRolePolicy('STUDENT'),
+    MENTOR: getDefaultRolePolicy('MENTOR'),
+    ADMIN: getDefaultRolePolicy('ADMIN'),
+  };
+
+  try {
+    const settings = await getAdminSystemSettingsService();
+    authRatePolicyCache = {
+      enabled: settings.auth_rate_limit_enabled !== false,
+      STUDENT: {
+        max: toPositiveInteger(settings.student_auth_rate_limit_max, defaults.STUDENT.max),
+        windowMs: toPositiveInteger(settings.student_auth_rate_limit_window_ms, defaults.STUDENT.windowMs),
+      },
+      MENTOR: {
+        max: toPositiveInteger(settings.mentor_auth_rate_limit_max, defaults.MENTOR.max),
+        windowMs: toPositiveInteger(settings.mentor_auth_rate_limit_window_ms, defaults.MENTOR.windowMs),
+      },
+      ADMIN: {
+        max: toPositiveInteger(settings.admin_auth_rate_limit_max, defaults.ADMIN.max),
+        windowMs: toPositiveInteger(settings.admin_auth_rate_limit_window_ms, defaults.ADMIN.windowMs),
+      },
+    };
+  } catch {
+    authRatePolicyCache = defaults;
+  }
+
+  authRatePolicyCacheExpiresAt = now + 30 * 1000;
+  return authRatePolicyCache;
+};
+
+const getRoleAwareAuthLimiter = async (req) => {
+  const role = normalizeRole(req?.body?.role);
+  const policy = await getAuthRatePolicy();
+  const rolePolicy = policy[role] || getDefaultRolePolicy(role);
+
+  const key = `${role}:${rolePolicy.max}:${rolePolicy.windowMs}`;
+  if (limiterByPolicyKey.has(key)) {
+    return limiterByPolicyKey.get(key);
+  }
+
+  const limiter = rateLimit({
+    windowMs: rolePolicy.windowMs,
+    max: rolePolicy.max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    skip: (request) => {
+      const path = String(request.path || '').toLowerCase();
+      return path !== '/login';
+    },
+    keyGenerator: (request) => `${request.ip}:${normalizeRole(request?.body?.role)}:${getAuthIdentity(request)}`,
+    handler: createJsonRateLimitHandler(
+      `Too many ${role.toLowerCase()} login attempts. Please wait before trying again.`,
+      rolePolicy.windowMs
+    ),
+  });
+
+  limiterByPolicyKey.set(key, limiter);
+  return limiter;
+};
 
 const createJsonRateLimitHandler = (message, windowMs) => (req, res) => {
   const resetTime = req.rateLimit?.resetTime ? new Date(req.rateLimit.resetTime).getTime() : null;
@@ -23,17 +146,28 @@ const createJsonRateLimitHandler = (message, windowMs) => (req, res) => {
  * npm install rate-limit-redis ioredis
  * Use Redis store to share counters across multiple backend instances.
  */
-export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: createJsonRateLimitHandler(
-    'Too many requests. Please wait 15 minutes before trying again.',
-    15 * 60 * 1000
-  ),
-  skipSuccessfulRequests: true,
-});
+export const authLimiter = async (req, res, next) => {
+  try {
+    const policy = await getAuthRatePolicy();
+    if (policy.enabled === false) return next();
+
+    const limiter = await getRoleAwareAuthLimiter(req);
+    return limiter(req, res, next);
+  } catch {
+    const fallback = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: process.env.NODE_ENV === 'production' ? 10 : 50,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: true,
+      skip: (request) => String(request.path || '').toLowerCase() !== '/login',
+      keyGenerator: (request) => `${request.ip}:${getAuthIdentity(request)}`,
+      handler: createJsonRateLimitHandler('Too many login attempts. Please wait before trying again.', 15 * 60 * 1000),
+    });
+
+    return fallback(req, res, next);
+  }
+};
 
 /**
  * Baseline limiter for all API routes.

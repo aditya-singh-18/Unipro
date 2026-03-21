@@ -17,6 +17,7 @@ export default function UserRegistrationModal({
 }: UserRegistrationModalProps) {
   const NAME_REGEX = /^[A-Za-z .'-]{2,100}$/;
   const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
+  const USER_KEY_REGEX = /^[A-Za-z0-9_-]{3,10}$/;
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/;
 
@@ -49,6 +50,7 @@ export default function UserRegistrationModal({
   const [success, setSuccess] = useState("");
 
   const [formData, setFormData] = useState({
+    user_key: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -64,6 +66,7 @@ export default function UserRegistrationModal({
   });
 
   const passwordStrength = getPasswordStrength(formData.password);
+  const passwordStrengthWidth = `${Math.max(0, Math.min(100, (passwordStrength.passed / 5) * 100))}%`;
   const passwordsMatch =
     formData.confirmPassword.length === 0 || formData.password === formData.confirmPassword;
 
@@ -83,6 +86,7 @@ export default function UserRegistrationModal({
 
   const validateForm = (): boolean => {
     const normalizedEmail = formData.email.trim().toLowerCase();
+    const normalizedUserKey = formData.user_key.trim().toUpperCase();
     const normalizedName = formData.full_name.trim();
     const normalizedDepartment = formData.department.trim();
     const normalizedDivision = formData.division.trim();
@@ -90,8 +94,13 @@ export default function UserRegistrationModal({
     const normalizedRollNo = formData.roll_number.trim();
     const normalizedContact = formData.contact_number.trim();
 
-    if (!normalizedEmail || !formData.password || !normalizedName) {
+    if (!normalizedUserKey || !normalizedEmail || !formData.password || !normalizedName) {
       setError("Please fill all required fields");
+      return false;
+    }
+
+    if (!USER_KEY_REGEX.test(normalizedUserKey)) {
+      setError("User key must be 3-10 characters and contain only letters, numbers, _ or -");
       return false;
     }
 
@@ -161,6 +170,7 @@ export default function UserRegistrationModal({
       setError("");
 
       const payload = {
+        user_key: formData.user_key.trim().toUpperCase(),
         role: selectedRole,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
@@ -215,6 +225,7 @@ export default function UserRegistrationModal({
     setStep("role");
     setSelectedRole(null);
     setFormData({
+      user_key: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -311,6 +322,24 @@ export default function UserRegistrationModal({
           {/* STEP 2: REGISTRATION FORM */}
           {step === "form" && selectedRole && (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* USER KEY */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  User Key <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="user_key"
+                  value={formData.user_key}
+                  onChange={handleInputChange}
+                  placeholder={selectedRole === "STUDENT" ? "e.g. STU1001" : selectedRole === "MENTOR" ? "e.g. MEN1001" : "e.g. ADM1001"}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  maxLength={10}
+                  required
+                />
+                <p className="text-xs text-slate-500">3-10 chars, letters/numbers/_/- only</p>
+              </div>
+
               {/* EMAIL */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700">
@@ -348,7 +377,7 @@ export default function UserRegistrationModal({
                     <div className="h-2 w-full rounded bg-slate-200 overflow-hidden">
                       <div
                         className={`h-full transition-all ${passwordStrength.color}`}
-                        style={{ width: `${(passwordStrength.passed / 5) * 100}%` }}
+                        style={{ width: passwordStrengthWidth }}
                       />
                     </div>
                     <p className="text-xs font-medium text-slate-600">Strength: {passwordStrength.label}</p>

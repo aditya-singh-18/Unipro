@@ -1,6 +1,5 @@
 import pool from '../config/db.js'; // ← tum already use kar rahe ho
 import { logQueryResult } from '../utils/dbInspector.js';
-import { generateUniqueUserKey } from '../utils/userKeyGenerator.js';
 import { validateAndHashPassword } from '../utils/passwordPolicy.js';
 import { parsePagination } from '../utils/pagination.js';
 import crypto from 'crypto';
@@ -165,6 +164,11 @@ const isValidPhone = (value) => {
   return /^\+?[0-9]{10,15}$/.test(value.trim());
 };
 
+const isValidUserKey = (value) => {
+  if (!value || typeof value !== 'string') return false;
+  return /^[A-Za-z0-9_-]{3,10}$/.test(value.trim());
+};
+
 const isStrongPassword = (value) => {
   if (!value || typeof value !== 'string') return false;
   if (value.length < 8 || value.length > 128) return false;
@@ -186,14 +190,21 @@ const normalizeText = (value) => {
    ADMIN: REGISTER USER
 ========================= */
 export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) => {
-  // SECURITY: user_key is generated server-side and client-supplied values are ignored.
+  const userKey = normalizeText(payload?.user_key).toUpperCase();
   const role = normalizeText(payload?.role).toUpperCase();
   const email = normalizeText(payload?.email).toLowerCase();
   const password = payload?.password;
   const profile = payload?.profile || {};
 
-  if (!role || !email || !password) {
-    throw { status: 400, message: 'role, email and password are required' };
+  if (!userKey || !role || !email || !password) {
+    throw { status: 400, message: 'user_key, role, email and password are required' };
+  }
+
+  if (!isValidUserKey(userKey)) {
+    throw {
+      status: 400,
+      message: 'user_key must be 3-10 chars and contain only letters, numbers, _ or -',
+    };
   }
 
   if (!ALLOWED_ROLES.has(role)) {
@@ -261,7 +272,6 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
     }
   }
 
-  const generatedUserKey = await generateUniqueUserKey(role, pool, department, yearValue);
   const emailVerificationToken = crypto.randomBytes(32).toString('hex');
   const emailVerificationTokenHash = crypto
     .createHash('sha256')
@@ -269,12 +279,17 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
     .digest('hex');
 
   const existingUser = await pool.query(
-    'SELECT user_key, email FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
-    [email]
+    'SELECT user_key, email FROM users WHERE user_key = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
+    [userKey, email]
   );
 
   if (existingUser.rowCount > 0) {
-    throw { status: 409, message: 'User with same user_key or email already exists' };
+    const duplicate = existingUser.rows[0];
+    if (duplicate.user_key === userKey) {
+      throw { status: 409, message: 'User with same user_key already exists' };
+    }
+
+    throw { status: 409, message: 'User with same email already exists' };
   }
 
   const password_hash = await validateAndHashPassword(password);
@@ -306,7 +321,7 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
         INSERT INTO users (user_key, role, email, password_hash)
         VALUES ($1, $2, $3, $4)
       `,
-      [generatedUserKey, role, email, password_hash]
+      [userKey, role, email, password_hash]
     );
 
     await client.query(
@@ -318,11 +333,11 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
           email_verify_token_expires = NOW() + INTERVAL '24 hours'
         WHERE user_key = $1
       `,
-      [generatedUserKey, emailVerificationTokenHash]
+      [userKey, emailVerificationTokenHash]
     );
 
     // TODO: Send email with verification link: /api/auth/verify-email?token=<plain_token>
-    console.log('[SECURITY] Email verification pending for user:', generatedUserKey);
+    console.log('[SECURITY] Email verification pending for user:', userKey);
 
     if (role === 'STUDENT') {
       await client.query(
@@ -340,7 +355,7 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
-          generatedUserKey,
+          userKey,
           fullName,
           email,
           department,
@@ -366,7 +381,7 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
           VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
-          generatedUserKey,
+          userKey,
           fullName,
           email,
           department,
@@ -390,7 +405,7 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
           VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
-          generatedUserKey,
+          userKey,
           fullName,
           email,
           department,
@@ -410,7 +425,7 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
 
   return {
     message: 'User registered successfully',
-    user_key: generatedUserKey,
+    user_key: userKey,
     role
   };
 };

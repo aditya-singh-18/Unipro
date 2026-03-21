@@ -46,6 +46,9 @@ export default function AdminSidebar() {
   const modalRef = useRef<HTMLDivElement>(null);
   const STORAGE_KEY = "admin_sidebar_mode";
 
+  const resolveSidebarMode = (value: string | null): SidebarMode =>
+    value === "hover" ? "hover" : "stable";
+
   const effectiveCollapsed = mode === "hover" ? !isHovering : collapsed;
 
   useEffect(() => {
@@ -55,6 +58,26 @@ export default function AdminSidebar() {
       // ignore storage errors
     }
   }, [mode]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return;
+      setMode(resolveSidebarMode(event.newValue));
+    };
+
+    const handleCustomSidebarMode = (event: Event) => {
+      const customEvent = event as CustomEvent<SidebarMode>;
+      setMode(resolveSidebarMode(customEvent.detail ?? null));
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("admin-sidebar-mode-change", handleCustomSidebarMode as EventListener);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("admin-sidebar-mode-change", handleCustomSidebarMode as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     const offsetPx =
@@ -114,10 +137,11 @@ export default function AdminSidebar() {
         transition-all
         duration-300
         ease-in-out
+        overflow-hidden
       `}
     >
       {/* Header */}
-      <div className="px-6 py-6 border-b border-white/10">
+      <div className="border-b border-white/10 px-4 py-4">
         <div className="flex items-center justify-between">
           {!effectiveCollapsed && (
             <div className="flex items-center gap-3 min-w-0">
@@ -143,8 +167,8 @@ export default function AdminSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar">
-        <div className="space-y-1">
+      <nav className="flex-1 px-2 py-2">
+        <div className="space-y-0.5">
           {menu.map((item) => {
             const active =
               pathname === item.path ||
@@ -158,10 +182,10 @@ export default function AdminSidebar() {
                   group
                   flex
                   items-center
-                  gap-3
-                  px-4
-                  py-3
-                  rounded-xl
+                  gap-2.5
+                  px-3
+                  py-2.5
+                  rounded-lg
                   cursor-pointer
                   transition-all
                   duration-200
@@ -174,7 +198,7 @@ export default function AdminSidebar() {
                 title={effectiveCollapsed ? item.label : undefined}
               >
                 <item.icon 
-                  size={20} 
+                  size={19} 
                   className={`shrink-0 ${active ? 'text-white' : 'text-blue-200'} transition-colors`} 
                 />
                 {!effectiveCollapsed && (
@@ -189,10 +213,10 @@ export default function AdminSidebar() {
       </nav>
 
       {/* Sidebar mode settings */}
-      <div className="px-3 pb-2">
+      <div className="px-2 pb-2">
         <button
           onClick={() => setMode((prev) => (prev === "stable" ? "hover" : "stable"))}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/10 transition-all duration-200 text-blue-100"
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-all duration-200 text-blue-100"
           title={effectiveCollapsed ? "Toggle sidebar mode" : undefined}
         >
           <Settings size={18} className="shrink-0" />
@@ -205,17 +229,17 @@ export default function AdminSidebar() {
       </div>
 
       {/* Footer - Logout */}
-      <div className="px-3 py-4 border-t border-white/10">
+      <div className="border-t border-white/10 px-2 py-3">
         <button
           onClick={handleLogoutClick}
           className="
             w-full
             flex
             items-center
-            gap-3
-            px-4
-            py-3
-            rounded-xl
+            gap-2.5
+            px-3
+            py-2.5
+            rounded-lg
             hover:bg-red-500/20
             text-red-300
             hover:text-red-200

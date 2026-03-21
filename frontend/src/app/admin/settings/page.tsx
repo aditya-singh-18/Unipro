@@ -7,6 +7,7 @@ import {
   FileText,
   GraduationCap,
   Layers3,
+  Shield,
   Users,
 } from "lucide-react";
 import {
@@ -27,6 +28,13 @@ const defaultSettings: AdminSystemSettings = {
 
   allow_student_login: true,
   allow_mentor_login: true,
+  auth_rate_limit_enabled: true,
+  student_auth_rate_limit_max: 20,
+  mentor_auth_rate_limit_max: 12,
+  admin_auth_rate_limit_max: 8,
+  student_auth_rate_limit_window_ms: 900000,
+  mentor_auth_rate_limit_window_ms: 900000,
+  admin_auth_rate_limit_window_ms: 900000,
   allow_team_creation: true,
   allow_project_creation: true,
   mentor_assignment_mode: 'manual_only',
@@ -84,6 +92,7 @@ const defaultSettings: AdminSystemSettings = {
 
 type SettingsSectionId =
   | "general"
+  | "authentication"
   | "mentor"
   | "timeline"
   | "team"
@@ -230,6 +239,12 @@ export default function AdminSettingsPage() {
       icon: Cog,
     },
     {
+      id: "authentication",
+      title: "Authentication Settings",
+      subtitle: "Role-based login rate limits and lock windows",
+      icon: Shield,
+    },
+    {
       id: "mentor",
       title: "Mentor Assignment",
       subtitle: "Assignment mode, scoring and load balance",
@@ -264,25 +279,27 @@ export default function AdminSettingsPage() {
   const activeSectionMeta =
     sections.find((section) => section.id === activeSection) || sections[0];
 
+  const normalizeModeLabel = (mode: ProjectCycle["project_mode"]) => {
+    if (mode === "team_based") return "Team Based";
+    if (mode === "individual") return "Individual";
+    return "Team + Individual";
+  };
+
+  const getCycleDisplayName = (cycle: ProjectCycle) => {
+    const rawName = cycle.cycle_name.trim();
+    if (/^smoke cycle\s*\d+$/i.test(rawName)) {
+      return `Project Intake ${cycle.batch_start_year}-${cycle.batch_end_year}`;
+    }
+    return rawName;
+  };
+
+  const getCycleUsageDescription = (cycle: ProjectCycle) => {
+    const modeLabel = normalizeModeLabel(cycle.project_mode);
+    return `Used for ${modeLabel.toLowerCase()} project onboarding for batch ${cycle.batch_start_year}-${cycle.batch_end_year}.`;
+  };
+
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-linear-to-r from-slate-100 via-white to-cyan-50 p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">System Settings</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Configure platform behavior from one place. Click a category to open only that settings block.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 sm:grid-cols-4">
-            <StatChip label="Student Login" value={settings.allow_student_login ? "On" : "Off"} />
-            <StatChip label="Mentor Login" value={settings.allow_mentor_login ? "On" : "Off"} />
-            <StatChip label="Weekly Submissions" value={settings.enable_weekly_submissions ? "Enabled" : "Disabled"} />
-            <StatChip label="Mentor Mode" value={settings.mentor_assignment_mode.replaceAll("_", " ")} />
-          </div>
-        </div>
-      </section>
-
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
       {message ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div> : null}
 
@@ -291,8 +308,8 @@ export default function AdminSettingsPage() {
           <div className="text-sm text-slate-500">Loading settings...</div>
         </section>
       ) : (
-        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-4 lg:self-start">
             <div className="mb-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Configuration Menu</div>
             <div className="space-y-1">
               {sections.map((section) => {
@@ -349,6 +366,64 @@ export default function AdminSettingsPage() {
                   <ToggleField label="Allow Mentor Login" checked={settings.allow_mentor_login} onChange={(value) => setBool('allow_mentor_login', value)} />
                   <ToggleField label="Allow Team Creation" checked={settings.allow_team_creation} onChange={(value) => setBool('allow_team_creation', value)} />
                   <ToggleField label="Allow Project Creation" checked={settings.allow_project_creation} onChange={(value) => setBool('allow_project_creation', value)} />
+                </div>
+              </div>
+            ) : null}
+
+            {activeSection === "authentication" ? (
+              <div className="space-y-5">
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+                  Production note: Limits are applied per role + client identity. Window is in milliseconds.
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <ToggleField
+                    label="Enable Auth Rate Limiting"
+                    checked={settings.auth_rate_limit_enabled}
+                    onChange={(value) => setBool('auth_rate_limit_enabled', value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <NumberField
+                    label="Student Max Attempts"
+                    value={settings.student_auth_rate_limit_max}
+                    onChange={(value) => setNumber('student_auth_rate_limit_max', value)}
+                    help="Attempts allowed per window"
+                  />
+                  <NumberField
+                    label="Mentor Max Attempts"
+                    value={settings.mentor_auth_rate_limit_max}
+                    onChange={(value) => setNumber('mentor_auth_rate_limit_max', value)}
+                    help="Attempts allowed per window"
+                  />
+                  <NumberField
+                    label="Admin Max Attempts"
+                    value={settings.admin_auth_rate_limit_max}
+                    onChange={(value) => setNumber('admin_auth_rate_limit_max', value)}
+                    help="Stricter for privileged accounts"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <NumberField
+                    label="Student Window (ms)"
+                    value={settings.student_auth_rate_limit_window_ms}
+                    onChange={(value) => setNumber('student_auth_rate_limit_window_ms', value)}
+                    help="Example: 900000 = 15 minutes"
+                  />
+                  <NumberField
+                    label="Mentor Window (ms)"
+                    value={settings.mentor_auth_rate_limit_window_ms}
+                    onChange={(value) => setNumber('mentor_auth_rate_limit_window_ms', value)}
+                    help="Example: 900000 = 15 minutes"
+                  />
+                  <NumberField
+                    label="Admin Window (ms)"
+                    value={settings.admin_auth_rate_limit_window_ms}
+                    onChange={(value) => setNumber('admin_auth_rate_limit_window_ms', value)}
+                    help="Example: 900000 = 15 minutes"
+                  />
                 </div>
               </div>
             ) : null}
@@ -503,8 +578,9 @@ export default function AdminSettingsPage() {
                   {cycles.map((cycle) => (
                     <div key={cycle.cycle_id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
                       <div>
-                        <div className="font-semibold text-slate-900">{cycle.cycle_name}</div>
-                        <div className="text-xs text-slate-500">Batch {cycle.batch_start_year} - {cycle.batch_end_year} • Mode: {cycle.project_mode}</div>
+                        <div className="font-semibold text-slate-900">{getCycleDisplayName(cycle)}</div>
+                        <div className="text-xs text-slate-500">Batch {cycle.batch_start_year} - {cycle.batch_end_year} • Mode: {normalizeModeLabel(cycle.project_mode)}</div>
+                        <div className="mt-1 text-xs text-slate-500">{getCycleUsageDescription(cycle)}</div>
                       </div>
                       <button
                         onClick={() => void handleActivateCycle(cycle.cycle_id)}
@@ -533,15 +609,6 @@ export default function AdminSettingsPage() {
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function StatChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-center">
-      <div className="truncate text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 truncate text-xs font-semibold text-slate-800">{value}</div>
     </div>
   );
 }

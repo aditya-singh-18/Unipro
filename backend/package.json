@@ -43,6 +43,7 @@
     "smoke:tracker:phase6": "node scripts/runTrackerPhase6Smoke.mjs",
     "smoke:tracker:phase7:unit": "node scripts/runTrackerPhase7UnitSmoke.mjs",
     "smoke:tracker:phase7:api": "node scripts/runTrackerPhase7ApiSmoke.mjs",
+    "smoke:tracker:protrack": "node scripts/runTrackerProtrackEnhancementSmoke.mjs",
     "smoke:tracker:phase7:e2e": "node scripts/runTrackerPhase7E2ESmoke.mjs",
     "smoke:tracker:phase7:perf": "node scripts/runTrackerPhase7PerformanceProbe.mjs",
     "smoke:tracker:phase7:security": "node scripts/runTrackerPhase7SecuritySmoke.mjs",

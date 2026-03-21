@@ -8,6 +8,13 @@ export type AdminSystemSettings = {
 
   allow_student_login: boolean;
   allow_mentor_login: boolean;
+  auth_rate_limit_enabled: boolean;
+  student_auth_rate_limit_max: number;
+  mentor_auth_rate_limit_max: number;
+  admin_auth_rate_limit_max: number;
+  student_auth_rate_limit_window_ms: number;
+  mentor_auth_rate_limit_window_ms: number;
+  admin_auth_rate_limit_window_ms: number;
   allow_team_creation: boolean;
   allow_project_creation: boolean;
   mentor_assignment_mode: 'manual_only' | 'recommendation_required' | 'auto_assign';

@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/sidebar/StudentSidebar";
 import Topbar from "@/components/dashboard/Topbar";
+import ProgressScoreCard from "@/components/tracker/ProgressScoreCard";
+import DailyLogForm from "@/components/tracker/DailyLogForm";
+import MentorFeedbackList from "@/components/tracker/MentorFeedbackList";
+import GithubConnectCard from "@/components/tracker/GithubConnectCard";
 import { getMyProjects, getProjectDetail } from "@/services/project.service";
 import {
   createWeeklySubmission,
+  createDailyLog,
   getWeekDraft,
   getProjectWeeks,
   getWeekReviews,
@@ -16,10 +21,24 @@ import {
   uploadTrackerFile,
   resubmitWeeklySubmission,
   saveWeekDraft,
+  getTodayDailyLog,
+  getMyProjectScores,
+  getMyMentorFeedback,
+  getProjectTasks,
+  getMyGithubIdentity,
+  getGithubOAuthStartUrl,
+  markMentorFeedbackRead,
+  replyToMentorFeedback,
   type TrackerWeek,
   type WeekReview,
   type WeekSubmission,
   type SubmissionFile,
+  type TrackerTask,
+  type DailyLog,
+  type ProgressScore,
+  type MentorFeedback,
+  type CreateDailyLogPayload,
+  type GithubIdentity,
 } from "@/services/tracker.service";
 
 type StudentProject = {
@@ -60,6 +79,7 @@ const normalizeExternalUrl = (value?: string | null) => {
 
 export default function ProgressPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeSection, setActiveSection] = useState<"progress" | "submission">("progress");
   const [projects, setProjects] = useState<StudentProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
@@ -92,6 +112,17 @@ export default function ProgressPage() {
   const [weekDetailSubmissions, setWeekDetailSubmissions] = useState<WeekSubmission[]>([]);
   const [weekDetailFiles, setWeekDetailFiles] = useState<Record<number, SubmissionFile[]>>({});
   const [weekDetailReviews, setWeekDetailReviews] = useState<WeekReview[]>([]);
+  const [todayLog, setTodayLog] = useState<DailyLog | null>(null);
+  const [hasSubmittedDailyLog, setHasSubmittedDailyLog] = useState(false);
+  const [trackerTasks, setTrackerTasks] = useState<TrackerTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [scores, setScores] = useState<ProgressScore[]>([]);
+  const [feedback, setFeedback] = useState<MentorFeedback[]>([]);
+  const [githubIdentity, setGithubIdentity] = useState<GithubIdentity | null>(null);
+  const [githubLinking, setGithubLinking] = useState(false);
+  const [githubNotice, setGithubNotice] = useState("");
+  const [insightsError, setInsightsError] = useState("");
+  const [insightsLoading, setInsightsLoading] = useState(false);
   const draftHydratedWeekIdRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
   const draftRetryTimerRef = useRef<number | null>(null);
@@ -183,6 +214,20 @@ export default function ProgressPage() {
     };
   }, [submissions]);
 
+  const latestScore = useMemo(() => {
+    if (!scores.length) return null;
+    return [...scores].sort((a, b) => {
+      const aTime = new Date(a.calculated_at).getTime();
+      const bTime = new Date(b.calculated_at).getTime();
+      return bTime - aTime;
+    })[0];
+  }, [scores]);
+
+  const projectFeedback = useMemo(
+    () => feedback.filter((item) => item.project_id === selectedProjectId),
+    [feedback, selectedProjectId]
+  );
+
   useEffect(() => {
     const loadProjects = async () => {
       try {
@@ -226,6 +271,61 @@ export default function ProgressPage() {
 
     void loadWeeksAndTasks();
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) return;
+
+    const loadEnhancements = async () => {
+      try {
+        setInsightsLoading(true);
+        setTasksLoading(true);
+        setInsightsError("");
+        const [today, myScores, myFeedback] = await Promise.all([
+          getTodayDailyLog(selectedProjectId),
+          getMyProjectScores(selectedProjectId),
+          getMyMentorFeedback(),
+        ]);
+
+        const github = await getMyGithubIdentity();
+        const tasks = await getProjectTasks(selectedProjectId);
+
+        setTodayLog(today.log);
+        setHasSubmittedDailyLog(today.submitted);
+        setScores(myScores);
+        setFeedback(myFeedback);
+        setGithubIdentity(github);
+        setTrackerTasks(tasks);
+      } catch {
+        setInsightsError("Some progress widgets failed to load. Weekly tracker remains available.");
+      } finally {
+        setInsightsLoading(false);
+        setTasksLoading(false);
+      }
+    };
+
+    void loadEnhancements();
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    const linked = String(searchParams.get("github_linked") || "").toLowerCase();
+    const username = String(searchParams.get("github_username") || "").trim();
+    const reason = String(searchParams.get("reason") || "").trim();
+
+    if (linked === "success") {
+      setGithubNotice(username ? `GitHub linked: ${username}` : "GitHub linked successfully.");
+      if (username) {
+        setGithubIdentity((prev) => ({
+          user_key: prev?.user_key || "",
+          github_username: username,
+        }));
+      }
+      return;
+    }
+
+    if (linked === "failed") {
+      setGithubNotice(reason ? `GitHub link failed: ${reason}` : "GitHub link failed.");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!selectedWeekId) {
@@ -514,6 +614,62 @@ export default function ProgressPage() {
     }
   };
 
+  const submitDailyLog = async (payload: CreateDailyLogPayload) => {
+    if (!selectedProjectId) return null;
+
+    try {
+      const result = await createDailyLog(selectedProjectId, payload);
+      setTodayLog(result.log);
+      setHasSubmittedDailyLog(true);
+      setScores((prev) => [result.score, ...prev.filter((score) => score.score_id !== result.score.score_id)]);
+      return result;
+    } catch (err) {
+      const message =
+        typeof err === "object" &&
+        err !== null &&
+        "response" in err &&
+        typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+          ? String((err as { response?: { data?: { message?: string } } }).response?.data?.message)
+          : "";
+
+      if (message.toLowerCase().includes("already submitted")) {
+        const today = await getTodayDailyLog(selectedProjectId);
+        setTodayLog(today.log);
+        setHasSubmittedDailyLog(today.submitted);
+      }
+
+      throw err;
+    }
+  };
+
+  const handleMarkFeedbackRead = async (feedbackId: string) => {
+    const updated = await markMentorFeedbackRead(feedbackId);
+    setFeedback((prev) => prev.map((item) => (item.feedback_id === feedbackId ? updated : item)));
+  };
+
+  const handleReplyFeedback = async (feedbackId: string, reply: string) => {
+    const updated = await replyToMentorFeedback(feedbackId, reply);
+    setFeedback((prev) => prev.map((item) => (item.feedback_id === feedbackId ? updated : item)));
+  };
+
+  const handleGithubConnect = async () => {
+    try {
+      setGithubLinking(true);
+      setGithubNotice("");
+      const payload = await getGithubOAuthStartUrl();
+      if (!payload.authorize_url) {
+        setGithubNotice("Unable to start GitHub OAuth flow.");
+        return;
+      }
+
+      window.location.assign(payload.authorize_url);
+    } catch {
+      setGithubNotice("Unable to start GitHub OAuth flow.");
+    } finally {
+      setGithubLinking(false);
+    }
+  };
+
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-[#d6e3f2] text-slate-900">
       <Sidebar />
@@ -591,6 +747,7 @@ export default function ProgressPage() {
 
           {error && <div className="rounded-2xl border border-rose-200 bg-rose-50/90 px-4 py-3 text-sm text-rose-700 shadow-sm">{error}</div>}
           {success && <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-700 shadow-sm">{success}</div>}
+          {githubNotice && <div className="rounded-2xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-700 shadow-sm">{githubNotice}</div>}
 
           {activeSection === "submission" ? (
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -802,6 +959,36 @@ export default function ProgressPage() {
 
           {activeSection === "progress" ? (
           <>
+          <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <ProgressScoreCard
+              score={latestScore}
+              loading={insightsLoading}
+              error={insightsError}
+            />
+            <DailyLogForm
+              hasSubmittedToday={hasSubmittedDailyLog}
+              todayLog={todayLog}
+              tasks={trackerTasks.filter((task) => task.status !== "done")}
+              tasksLoading={tasksLoading}
+              onSubmit={submitDailyLog}
+            />
+          </section>
+
+          <GithubConnectCard
+            githubUsername={githubIdentity?.github_username || null}
+            linking={githubLinking}
+            onConnect={handleGithubConnect}
+            message={githubNotice}
+          />
+
+          <MentorFeedbackList
+            feedback={projectFeedback}
+            loading={insightsLoading}
+            error={insightsError}
+            onMarkRead={handleMarkFeedbackRead}
+            onReply={handleReplyFeedback}
+          />
+
           {/* ── Progress Overview Panel ─────────────────────────── */}
           <section className="bg-white/88 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-[0_14px_30px_rgba(42,74,128,0.12)] p-5">
             <div className="flex items-center justify-between mb-5">

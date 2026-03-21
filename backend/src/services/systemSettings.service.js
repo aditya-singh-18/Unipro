@@ -76,6 +76,13 @@ const normalizeSettings = (raw) => {
 
     allow_student_login: toBool(current.allow_student_login, true),
     allow_mentor_login: toBool(current.allow_mentor_login, true),
+    auth_rate_limit_enabled: toBool(current.auth_rate_limit_enabled, true),
+    student_auth_rate_limit_max: toInt(current.student_auth_rate_limit_max, 20, 1, 200),
+    mentor_auth_rate_limit_max: toInt(current.mentor_auth_rate_limit_max, 12, 1, 200),
+    admin_auth_rate_limit_max: toInt(current.admin_auth_rate_limit_max, 8, 1, 200),
+    student_auth_rate_limit_window_ms: toInt(current.student_auth_rate_limit_window_ms, 900000, 1000, 3600000),
+    mentor_auth_rate_limit_window_ms: toInt(current.mentor_auth_rate_limit_window_ms, 900000, 1000, 3600000),
+    admin_auth_rate_limit_window_ms: toInt(current.admin_auth_rate_limit_window_ms, 900000, 1000, 3600000),
     auto_restore_at: current.auto_restore_at || null,
     allow_team_creation: toBool(current.allow_team_creation, true),
     allow_project_creation: toBool(current.allow_project_creation, true),
@@ -146,6 +153,22 @@ const validateSettings = (settings) => {
 
   if (settings.max_team_size < settings.min_team_size) {
     throw new Error('max_team_size must be greater than or equal to min_team_size');
+  }
+
+  if (
+    settings.student_auth_rate_limit_max < 1 ||
+    settings.mentor_auth_rate_limit_max < 1 ||
+    settings.admin_auth_rate_limit_max < 1
+  ) {
+    throw new Error('Authentication rate limit max values must be at least 1');
+  }
+
+  if (
+    settings.student_auth_rate_limit_window_ms < 1000 ||
+    settings.mentor_auth_rate_limit_window_ms < 1000 ||
+    settings.admin_auth_rate_limit_window_ms < 1000
+  ) {
+    throw new Error('Authentication rate limit windows must be at least 1000 ms');
   }
 
   if (!DAYS.includes(settings.deadline_day)) {

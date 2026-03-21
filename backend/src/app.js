@@ -35,6 +35,9 @@ import {
 
 const app = express();
 
+// Ensure client IP is resolved correctly behind load balancers/reverse proxies.
+app.set('trust proxy', 1);
+
 const { generateToken, doubleCsrfProtection, invalidCsrfTokenError } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET || 'change-this-csrf-secret',
   cookieName: '__Host-unipro.x-csrf-token',
@@ -92,7 +95,14 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-csrf-token'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'x-csrf-token',
+      'x-github-event',
+      'x-hub-signature-256',
+    ],
     exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
   })
 );
@@ -103,7 +113,17 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ─── Body Parsing (limit prevents large payload attacks) ─────────────────────
-app.use(express.json({ limit: '1mb' }));
+app.use(
+  express.json({
+    limit: '1mb',
+    verify: (req, _res, buf) => {
+      const url = String(req.originalUrl || req.url || '');
+      if (url.includes('/api/tracker/projects/') && url.includes('/github/webhook')) {
+        req.rawBody = Buffer.from(buf);
+      }
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 

@@ -119,10 +119,8 @@ export const deleteAdminSkill = async (req, res, next) => {
 
 export const adminRegisterUser = async (req, res, next) => {
   try {
-    // user_key is generated server-side — never trust client-supplied IDs
-    const { user_key: _ignoredUserKey, ...safeBody } = req.body || {};
     const result = await adminRegisterUserService({
-      payload: safeBody,
+      payload: req.body || {},
       actorUser: req.user,
       actorIp: req.ip,
     });
