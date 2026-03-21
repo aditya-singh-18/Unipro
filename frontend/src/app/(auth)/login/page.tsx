@@ -103,6 +103,10 @@ export default function LoginPage() {
     } catch (err) {
       console.error('❌ [Login] Error:', err);
       if (isAxiosError(err)) {
+        if (err.code === "ERR_NETWORK" || /network error/i.test(String(err.message || ""))) {
+          setError("Server connect nahi ho raha. Backend run hai ya nahi check karein (port 5000).");
+          return;
+        }
         const message = err.response?.data?.message;
         setError(message || "Invalid credentials");
       } else {

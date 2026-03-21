@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "@/lib/axios";
 import MentorSelectionModal from "@/components/modals/MentorSelectionModal";
@@ -23,13 +23,19 @@ type PendingProject = {
 
 type ComplianceFilter = "all" | AdminComplianceItem["compliance_status"];
 
+type CriticalAlert = {
+  id: string;
+  title: string;
+  detail: string;
+  timestamp: string;
+  onClick: () => void;
+};
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState({
     totalStudents: 0,
-    totalProjects: 0,
     pendingApprovals: 0,
-    activeMentors: 0,
   });
   const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([]);
   const [trackerStats, setTrackerStats] = useState({
@@ -54,6 +60,7 @@ export default function AdminDashboardPage() {
     },
   });
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<PendingProject | null>(null);
   const [complianceFilter, setComplianceFilter] = useState<ComplianceFilter>("all");
@@ -103,12 +110,11 @@ export default function AdminDashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
+      setDashboardError("");
       // Fetch all stats in parallel
-      const [projectsRes, usersRes, mentorsRes, statsRes] = await Promise.allSettled([
+      const [projectsRes, usersStatsRes] = await Promise.allSettled([
         axios.get("/project/admin/pending"),
-        axios.get("/user/admin/students/count"),
-        axios.get("/mentor/admin/list"),
-        axios.get("/project/admin/count"),
+        axios.get("/admin/users/statistics"),
       ]);
 
       // Process pending projects
@@ -119,26 +125,29 @@ export default function AdminDashboardPage() {
       // Process stats
       const newStats = {
         totalStudents: 0,
-        totalProjects: 0,
         pendingApprovals: 0,
-        activeMentors: 0,
       };
 
-      if (usersRes.status === "fulfilled") {
-        newStats.totalStudents = usersRes.value.data.count || 0;
-      }
-
-      if (statsRes.status === "fulfilled") {
-        newStats.totalProjects = statsRes.value.data.count || 0;
-      }
-
-      if (mentorsRes.status === "fulfilled") {
-        const mentors = mentorsRes.value.data.data || mentorsRes.value.data.mentors || [];
-        newStats.activeMentors = Array.isArray(mentors) ? mentors.length : 0;
+      if (usersStatsRes.status === "fulfilled") {
+        newStats.totalStudents = Number(usersStatsRes.value.data?.data?.total_students || 0);
       }
 
       if (projectsRes.status === "fulfilled") {
         newStats.pendingApprovals = projectsRes.value.data.count || 0;
+      }
+
+      const primaryRequests = [projectsRes, usersStatsRes] as const;
+      const failedPrimaryRequests = primaryRequests.filter((request) => request.status === "rejected");
+      if (failedPrimaryRequests.length > 0) {
+        const hasNetworkFailure = failedPrimaryRequests.some((request) => {
+          const reason = (request as PromiseRejectedResult).reason as { code?: string; message?: string } | undefined;
+          const message = String(reason?.message || reason || "");
+          return reason?.code === "ERR_NETWORK" || /network error|econnrefused|fetch failed/i.test(message);
+        });
+
+        if (hasNetworkFailure) {
+          setDashboardError("Dashboard data server se connect nahi ho pa raha. Backend/API run karke page refresh karein.");
+        }
       }
 
       const [trackerResult, complianceResult] = await Promise.allSettled([
@@ -214,13 +223,54 @@ export default function AdminDashboardPage() {
 
   const totalPages = Math.max(1, Math.ceil((complianceBoard.pagination?.total || 0) / (complianceBoard.pagination?.pageSize || 8)));
 
+  const criticalAlerts = useMemo<CriticalAlert[]>(() => {
+    const alerts: CriticalAlert[] = [];
+
+    complianceBoard.items
+      .filter((item) => item.compliance_status === "critical")
+      .slice(0, 5)
+      .forEach((item) => {
+        alerts.push({
+          id: `critical-${item.project_id}`,
+          title: `${item.title || item.project_id} needs immediate attention`,
+          detail: `Risk: ${item.risk_level} | Missed: ${item.missed_week_count} | Overdue: ${item.overdue_pending_count}`,
+          timestamp: item.latest_status_changed_at
+            ? new Date(item.latest_status_changed_at).toLocaleString()
+            : "Now",
+          onClick: () => router.push(`/admin/projects?projectId=${encodeURIComponent(String(item.project_id))}`),
+        });
+      });
+
+    escalations.slice(0, 5).forEach((item) => {
+      alerts.push({
+        id: `escalation-${item.project_id}-${item.week_id}`,
+        title: `${item.project_id} week ${item.week_number} escalated`,
+        detail: `${item.escalation_type === "pending_overdue" ? "Pending overdue" : "Review overdue"} | ${Number(item.overdue_hours || 0).toFixed(1)}h`,
+        timestamp: item.created_at ? new Date(item.created_at).toLocaleString() : "Now",
+        onClick: () => router.push(`/admin/projects?projectId=${encodeURIComponent(String(item.project_id))}`),
+      });
+    });
+
+    if (stats.pendingApprovals > 0) {
+      alerts.push({
+        id: "pending-approvals",
+        title: `${stats.pendingApprovals} project approval pending`,
+        detail: "Open approvals queue and assign review/mentor.",
+        timestamp: "Now",
+        onClick: () => router.push("/admin/approvals"),
+      });
+    }
+
+    return alerts.slice(0, 6);
+  }, [complianceBoard.items, escalations, router, stats.pendingApprovals]);
+
   return (
     <>
       <div className="space-y-6 sm:space-y-8">
           {/* ================= STAT CARDS ================= */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             <StatCard
-              title="Total Students"
+              title="Number of Students"
               value={stats.totalStudents.toString()}
               icon="👥"
               color="blue"
@@ -229,7 +279,7 @@ export default function AdminDashboardPage() {
             />
             <StatCard
               title="Active Projects"
-              value={(trackerStats.active_projects || stats.totalProjects).toString()}
+              value={String(Number(trackerStats.active_projects || 0))}
               icon="📊"
               color="green"
               trend="+8% from last month"
@@ -244,45 +294,20 @@ export default function AdminDashboardPage() {
               onClick={() => router.push("/admin/approvals")}
             />
             <StatCard
-              title="Active Mentors"
-              value={stats.activeMentors.toString()}
-              icon="🎓"
+              title="Requests"
+              value={stats.pendingApprovals.toString()}
+              icon="📨"
               color="purple"
-              trend="+3 new this month"
-              onClick={() => router.push("/admin/projects")}
+              trend="Open request queue"
+              onClick={() => router.push("/admin/approvals")}
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
-            <StatCard
-              title="Tracker Projects"
-              value={String(trackerStats.total_projects)}
-              icon="🧭"
-              color="blue"
-              trend="From tracker module"
-            />
-            <StatCard
-              title="High Risk Projects"
-              value={String(trackerStats.high_risk_projects)}
-              icon="⚠️"
-              color="yellow"
-              trend="Need mentor intervention"
-            />
-            <StatCard
-              title="Missed Weeks"
-              value={String(trackerStats.missed_weeks)}
-              icon="📅"
-              color="purple"
-              trend="Submission deadlines missed"
-            />
-            <StatCard
-              title="Tracker Active"
-              value={String(trackerStats.active_projects)}
-              icon="✅"
-              color="green"
-              trend="Currently active in tracker"
-            />
-          </div>
+          {dashboardError ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {dashboardError}
+            </div>
+          ) : null}
 
           {/* ================= MAIN CONTENT GRID ================= */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
@@ -290,9 +315,17 @@ export default function AdminDashboardPage() {
             <div className="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 lg:p-6 min-w-0">
               <div className="flex items-center justify-between mb-4 gap-2 min-w-0">
                 <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">Pending Project Approvals</h2>
-                <span className="px-3 sm:px-4 py-1 bg-linear-to-r from-yellow-100 to-amber-100 text-yellow-800 rounded-full text-xs sm:text-sm font-semibold shadow-sm whitespace-nowrap">
-                  {stats.pendingApprovals} Pending
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 sm:px-4 py-1 bg-linear-to-r from-yellow-100 to-amber-100 text-yellow-800 rounded-full text-xs sm:text-sm font-semibold shadow-sm whitespace-nowrap">
+                    {stats.pendingApprovals} Pending
+                  </span>
+                  <button
+                    onClick={() => router.push("/admin/approvals")}
+                    className="px-3 sm:px-4 py-1.5 rounded-full bg-blue-600 text-white text-xs sm:text-sm font-semibold hover:bg-blue-700 transition-colors whitespace-nowrap"
+                  >
+                    View
+                  </button>
+                </div>
               </div>
 
               {loading ? (
@@ -375,6 +408,35 @@ export default function AdminDashboardPage() {
                   label="System Settings"
                   color="gray"
                 />
+              </div>
+
+              <div className="mt-6 border-t border-slate-200 pt-5">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-800">Critical Alerts</h3>
+                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                    {criticalAlerts.length}
+                  </span>
+                </div>
+
+                {criticalAlerts.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                    No critical alerts right now.
+                  </div>
+                ) : (
+                  <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {criticalAlerts.map((alert) => (
+                      <button
+                        key={alert.id}
+                        onClick={alert.onClick}
+                        className="w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-left hover:border-rose-300 hover:bg-rose-100 transition-colors"
+                      >
+                        <p className="text-sm font-semibold text-slate-900">{alert.title}</p>
+                        <p className="mt-0.5 text-xs text-slate-600">{alert.detail}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">{alert.timestamp}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
