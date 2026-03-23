@@ -17,7 +17,7 @@ export default function UserRegistrationModal({
 }: UserRegistrationModalProps) {
   const NAME_REGEX = /^[A-Za-z .'-]{2,100}$/;
   const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
-  const USER_KEY_REGEX = /^[A-Za-z0-9_-]{3,10}$/;
+  const USER_KEY_REGEX = /^[A-Za-z0-9_-]{5,15}$/;
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/;
 
@@ -100,7 +100,7 @@ export default function UserRegistrationModal({
     }
 
     if (!USER_KEY_REGEX.test(normalizedUserKey)) {
-      setError("User key must be 3-10 characters and contain only letters, numbers, _ or -");
+      setError("User key must be 5-15 characters and contain only letters, numbers, _ or -");
       return false;
     }
 
@@ -334,10 +334,10 @@ export default function UserRegistrationModal({
                   onChange={handleInputChange}
                   placeholder={selectedRole === "STUDENT" ? "e.g. STU1001" : selectedRole === "MENTOR" ? "e.g. MEN1001" : "e.g. ADM1001"}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
-                  maxLength={10}
+                  maxLength={15}
                   required
                 />
-                <p className="text-xs text-slate-500">3-10 chars, letters/numbers/_/- only</p>
+                <p className="text-xs text-slate-500">5-15 chars, letters/numbers/_/- only</p>
               </div>
 
               {/* EMAIL */}
@@ -377,7 +377,7 @@ export default function UserRegistrationModal({
                     <div className="h-2 w-full rounded bg-slate-200 overflow-hidden">
                       <div
                         className={`h-full transition-all ${passwordStrength.color}`}
-                        style={{ width: passwordStrengthWidth }}
+                        style={{ inlineSize: passwordStrengthWidth }}
                       />
                     </div>
                     <p className="text-xs font-medium text-slate-600">Strength: {passwordStrength.label}</p>

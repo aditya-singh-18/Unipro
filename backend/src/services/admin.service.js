@@ -166,7 +166,7 @@ const isValidPhone = (value) => {
 
 const isValidUserKey = (value) => {
   if (!value || typeof value !== 'string') return false;
-  return /^[A-Za-z0-9_-]{3,10}$/.test(value.trim());
+  return /^[A-Za-z0-9_-]{5,15}$/.test(value.trim());
 };
 
 const isStrongPassword = (value) => {
@@ -203,7 +203,7 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
   if (!isValidUserKey(userKey)) {
     throw {
       status: 400,
-      message: 'user_key must be 3-10 chars and contain only letters, numbers, _ or -',
+      message: 'user_key must be 5-15 chars and contain only letters, numbers, _ or -',
     };
   }
 
