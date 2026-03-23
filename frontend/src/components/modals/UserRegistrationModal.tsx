@@ -496,15 +496,15 @@ export default function UserRegistrationModal({
                       required
                     >
                       <option value="">Select Department</option>
-                      <option value="Computer Science & Engineering">Computer Science & Engineering (CSE)</option>
-                      <option value="Mechanical Engineering">Mechanical Engineering (ME)</option>
-                      <option value="Electrical Engineering">Electrical Engineering (EE)</option>
-                      <option value="Civil Engineering">Civil Engineering (CE)</option>
-                      <option value="Electronics & Communication">Electronics & Communication (ECE)</option>
-                      <option value="Chemical Engineering">Chemical Engineering (CHE)</option>
-                      <option value="Biotechnology">Biotechnology (BT)</option>
-                      <option value="Information Technology">Information Technology (IT)</option>
-                      <option value="Aeronautical Engineering">Aeronautical Engineering (AE)</option>
+                      <option value="CSE">Computer Science & Engineering (CSE)</option>
+                      <option value="ME">Mechanical Engineering (ME)</option>
+                      <option value="EE">Electrical Engineering (EE)</option>
+                      <option value="CE">Civil Engineering (CE)</option>
+                      <option value="ECE">Electronics & Communication (ECE)</option>
+                      <option value="CHE">Chemical Engineering (CHE)</option>
+                      <option value="BT">Biotechnology (BT)</option>
+                      <option value="IT">Information Technology (IT)</option>
+                      <option value="AE">Aeronautical Engineering (AE)</option>
                     </select>
                   </div>
                 </>
@@ -526,15 +526,15 @@ export default function UserRegistrationModal({
                         required
                       >
                         <option value="">Select Department</option>
-                        <option value="Computer Science & Engineering">Computer Science & Engineering (CSE)</option>
-                        <option value="Mechanical Engineering">Mechanical Engineering (ME)</option>
-                        <option value="Electrical Engineering">Electrical Engineering (EE)</option>
-                        <option value="Civil Engineering">Civil Engineering (CE)</option>
-                        <option value="Electronics & Communication">Electronics & Communication (ECE)</option>
-                        <option value="Chemical Engineering">Chemical Engineering (CHE)</option>
-                        <option value="Biotechnology">Biotechnology (BT)</option>
-                        <option value="Information Technology">Information Technology (IT)</option>
-                        <option value="Aeronautical Engineering">Aeronautical Engineering (AE)</option>
+                        <option value="CSE">Computer Science & Engineering (CSE)</option>
+                        <option value="ME">Mechanical Engineering (ME)</option>
+                        <option value="EE">Electrical Engineering (EE)</option>
+                        <option value="CE">Civil Engineering (CE)</option>
+                        <option value="ECE">Electronics & Communication (ECE)</option>
+                        <option value="CHE">Chemical Engineering (CHE)</option>
+                        <option value="BT">Biotechnology (BT)</option>
+                        <option value="IT">Information Technology (IT)</option>
+                        <option value="AE">Aeronautical Engineering (AE)</option>
                       </select>
                     </div>
 

@@ -147,6 +147,27 @@ export const deleteAdminSkillService = async (employeeId, id) => {
 };
 
 const ALLOWED_ROLES = new Set(['STUDENT', 'MENTOR', 'ADMIN']);
+const DEPARTMENT_CODE_MAP = new Map([
+  ['CSE', 'CSE'],
+  ['COMPUTER SCIENCE & ENGINEERING', 'CSE'],
+  ['ME', 'ME'],
+  ['MECHANICAL ENGINEERING', 'ME'],
+  ['EE', 'EE'],
+  ['ELECTRICAL ENGINEERING', 'EE'],
+  ['CE', 'CE'],
+  ['CIVIL ENGINEERING', 'CE'],
+  ['CIVIL', 'CE'],
+  ['ECE', 'ECE'],
+  ['ELECTRONICS & COMMUNICATION', 'ECE'],
+  ['CHE', 'CHE'],
+  ['CHEMICAL ENGINEERING', 'CHE'],
+  ['BT', 'BT'],
+  ['BIOTECHNOLOGY', 'BT'],
+  ['IT', 'IT'],
+  ['INFORMATION TECHNOLOGY', 'IT'],
+  ['AE', 'AE'],
+  ['AERONAUTICAL ENGINEERING', 'AE'],
+]);
 
 const isValidEmail = (value) => {
   if (!value || typeof value !== 'string') return false;
@@ -184,6 +205,12 @@ const isStrongPassword = (value) => {
 const normalizeText = (value) => {
   if (value === undefined || value === null) return '';
   return String(value).trim();
+};
+
+const normalizeDepartmentCode = (value) => {
+  const raw = normalizeText(value).toUpperCase();
+  if (!raw) return '';
+  return DEPARTMENT_CODE_MAP.get(raw) || '';
 };
 
 /* =========================
@@ -230,7 +257,7 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
   }
 
   const fullName = normalizeText(profile.full_name);
-  const department = normalizeText(profile.department);
+  const department = normalizeDepartmentCode(profile.department);
   const designation = normalizeText(profile.designation);
   const contactNumber = normalizeText(profile.contact_number);
   const yearValue = Number.parseInt(normalizeText(profile.year), 10);
@@ -242,7 +269,10 @@ export const adminRegisterUserService = async ({ payload, actorUser, actorIp }) 
   }
 
   if (!department) {
-    throw { status: 400, message: 'Department is required' };
+    throw {
+      status: 400,
+      message: 'Department code is required (e.g. CSE, ME, CE, EE, ECE, IT)',
+    };
   }
 
   if (!isValidPhone(contactNumber)) {
