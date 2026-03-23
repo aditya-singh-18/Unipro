@@ -242,11 +242,12 @@ export default function AdminDashboardPage() {
       });
 
     escalations.slice(0, 5).forEach((item) => {
+      const escalationTimestamp = item.submitted_at || item.deadline_at;
       alerts.push({
         id: `escalation-${item.project_id}-${item.week_id}`,
         title: `${item.project_id} week ${item.week_number} escalated`,
         detail: `${item.escalation_type === "pending_overdue" ? "Pending overdue" : "Review overdue"} | ${Number(item.overdue_hours || 0).toFixed(1)}h`,
-        timestamp: item.created_at ? new Date(item.created_at).toLocaleString() : "Now",
+        timestamp: escalationTimestamp ? new Date(escalationTimestamp).toLocaleString() : "Now",
         onClick: () => router.push(`/admin/projects?projectId=${encodeURIComponent(String(item.project_id))}`),
       });
     });
